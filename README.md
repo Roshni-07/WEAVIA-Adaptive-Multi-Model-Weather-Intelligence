@@ -1361,60 +1361,7 @@ Source
 
 ---
 
-# 27. 🤖 Where WeatherGPT Fits
-
-WEAVIA can serve as the **forecast intelligence core** behind a conversational weather interface.
-
-The relationship is:
-
-```text
-                 WEATHERGPT
-             Conversational Layer
-                      │
-                      ▼
-               WEAVIA INSIGHT
-             Explain / Interpret
-                      │
-                      ▼
-┌──────────────────────────────────────────┐
-│                 WEAVIA                   │
-│                                          │
-│ Trust → Regime → Blend → Uncertainty     │
-│      → Extreme Signals → Verification    │
-└──────────────────────────────────────────┘
-                      │
-                      ▼
-              Weather Data Sources
-```
-
-This separation is intentional.
-
-### WEAVIA handles
-
-- Multi-model forecast processing
-- Context detection
-- Model trust
-- Adaptive blending
-- Uncertainty
-- Extreme-event signals
-- Verification
-- Forecast diagnostics
-
-### WeatherGPT can handle
-
-- Natural-language questions
-- Forecast explanations
-- User-oriented summaries
-- "Why is this different from another forecast?"
-- "Which model is being trusted?"
-- "Why is confidence low?"
-- "What changed since the previous forecast?"
-
-The conversational layer should remain grounded in structured outputs from the forecasting system.
-
----
-
-# 28. 🌐 Long-Term Direction
+# 27. 🌐 Long-Term Direction
 
 WEAVIA can evolve beyond a static blend into a continuously evaluated forecast intelligence platform.
 
@@ -1452,7 +1399,7 @@ It is to build a system that can answer:
 
 ---
 
-# 29. 🏆 SIH Alignment
+# 28. 🏆 SIH Alignment
 
 | SIH26081 Requirement | WEAVIA Response |
 |---|---|
@@ -1474,7 +1421,7 @@ It is to build a system that can answer:
 
 ---
 
-# 30. 📌 Project Status Convention
+# 29. 📌 Project Status Convention
 
 To keep the repository truthful, features should be classified using one of these states:
 
@@ -1492,7 +1439,7 @@ The actual repository implementation is the source of truth for current capabili
 
 ---
 
-# 31. 🧠 Project North Star
+# 30. 🧠 Project North Star
 
 WEAVIA is built around one simple idea:
 
@@ -1533,4 +1480,3 @@ The core intelligence can be summarized as:
 **Category:** Software  
 **Theme:** Disaster Management
 
-"# WEAVIA-Adaptive-Multi-Model-Weather-Intelligence" 
