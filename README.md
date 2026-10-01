@@ -1,11 +1,47 @@
+<div align="center">
+
 # 🌦️ WEAVIA
 
-### Adaptive Multi-Model Weather Intelligence
-**Hybrid AI–NWP Multi-Model Forecast Blending System**
+### Hybrid AI–NWP multi-model forecast blending for disaster management
+
+*Adaptive. Explainable. Verified against observations.*
+
+![SIH](https://img.shields.io/badge/SIH-2026-E8742C?labelColor=555555&style=flat-square)
+![PS](https://img.shields.io/badge/PS-SIH26081-0A7EC2?labelColor=555555&style=flat-square)
+![Org](https://img.shields.io/badge/ORG-MoES-1F6F5C?labelColor=555555&style=flat-square)
+![Theme](https://img.shields.io/badge/THEME-DISASTER%20MANAGEMENT-C0392B?labelColor=555555&style=flat-square)
+![Data](https://img.shields.io/badge/DATA-SYNTHETIC%20(REAL%20WIP)-E0A030?labelColor=555555&style=flat-square)
+
+![Python](https://img.shields.io/badge/PYTHON-3.12-3776AB?labelColor=555555&style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FASTAPI-API-009688?labelColor=555555&style=flat-square&logo=fastapi&logoColor=white)
+![LightGBM](https://img.shields.io/badge/LIGHTGBM-ML-2E8B57?labelColor=555555&style=flat-square)
+![Next.js](https://img.shields.io/badge/NEXT.JS-14-000000?labelColor=555555&style=flat-square&logo=nextdotjs&logoColor=white)
+![React Three Fiber](https://img.shields.io/badge/R3F-GLOBE-1A1A1A?labelColor=555555&style=flat-square&logo=threedotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TYPESCRIPT-STRICT-3178C6?labelColor=555555&style=flat-square&logo=typescript&logoColor=white)
+
+[🚀 Live Demo](REPLACE_WITH_LIVE_DEMO_URL) ·
+[🎥 Intro Video](#-intro-video) ·
+[📄 PRD](REPLACE_WITH_PRD_URL) ·
+[🧩 Architecture](#3-how-it-works) ·
+[🛠️ Tech Stack](#11-technology) ·
+[📊 Results](#6-verification-and-results) ·
+[🔗 API](#api-surface-apiv1) ·
+[🗺️ Roadmap](#9-roadmap-to-sih-2026-demo)
+
+</div>
 
 > **Weather models do not have to agree. The system has to know when to trust each one.**
 
 **Smart India Hackathon 2026 · SIH26081 · Ministry of Earth Sciences (MoES) · Software · Disaster Management**
+
+---
+
+## 🎥 Intro Video
+
+*A short walkthrough of the problem statement and our solution.*
+
+<!-- Replace with your video. YouTube: [![WEAVIA intro](https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=VIDEO_ID) -->
+[▶️ Watch the intro video](REPLACE_WITH_VIDEO_URL)
 
 ---
 
