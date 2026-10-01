@@ -19,13 +19,13 @@
 ![React Three Fiber](https://img.shields.io/badge/R3F-GLOBE-1A1A1A?labelColor=555555&style=flat-square&logo=threedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TYPESCRIPT-STRICT-3178C6?labelColor=555555&style=flat-square&logo=typescript&logoColor=white)
 
-[🚀 Live Demo](REPLACE_WITH_LIVE_DEMO_URL) ·
 [🎥 Intro Video](#-intro-video) ·
-[📄 PRD](REPLACE_WITH_PRD_URL) ·
-[🧩 Architecture](#3-how-it-works) ·
+[📄 PRD](docs/PRD.md) ·
+[🧩 Architecture](docs/ARCHITECTURE.md) ·
 [🛠️ Tech Stack](#11-technology) ·
 [📊 Results](#6-verification-and-results) ·
-[🔗 API](#api-surface-apiv1) ·
+[✅ Verification](docs/VERIFICATION.md) ·
+[🔗 API](docs/API.md) ·
 [🗺️ Roadmap](#9-roadmap-to-sih-2026-demo)
 
 </div>
@@ -41,7 +41,7 @@
 *A short walkthrough of the problem statement and our solution.*
 
 <!-- Replace with your video. YouTube: [![WEAVIA intro](https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=VIDEO_ID) -->
-[▶️ Watch the intro video](REPLACE_WITH_VIDEO_URL)
+▶️ *Video coming soon.*
 
 ---
 
@@ -57,6 +57,18 @@
 | **Status** | Working end-to-end prototype on **synthetic data**. Real-data integration in progress. See [Project status](#4-project-status) |
 
 > ⚠️ **Honesty notice.** All verification numbers in this repository come from a **synthetic** multi-model world. They prove the machinery works. They are **not** evidence of skill against real weather models. The UI shows a synthetic-data banner at all times. No accuracy claim is made until it is measured on real data.
+
+---
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [PRD](docs/PRD.md) | Problem, goals, scope, requirements, metrics, risks |
+| [Architecture](docs/ARCHITECTURE.md) | Pipeline stages, modules, provider contract, artifacts |
+| [Verification](docs/VERIFICATION.md) | Test protocol, baselines, bootstrap method, results, known gaps |
+| [API reference](docs/API.md) | All 14 routes, parameters, errors, examples |
+| [Frontend work log](docs/FRONTEND_WORK.md) | Frontend build notes |
 
 ---
 
@@ -260,7 +272,7 @@ The adaptive blend is compared on the **same held-out test slice** against:
 Individual models  vs  Equal-weight blend  vs  Inverse-error blend  vs  Adaptive WEAVIA blend
 ```
 
-Improvements are reported with **bootstrap confidence intervals**. If a CI includes 0, the UI shows **"CI includes 0: no claim"**. If events are too few, it shows **"too few events"**.
+Improvements are reported with **paired, date-block bootstrap confidence intervals** (2,000 resamples, 95% percentile intervals). Full method in [VERIFICATION.md](docs/VERIFICATION.md). If a CI includes 0, the UI shows **"CI includes 0: no claim"**. If events are too few, it shows **"too few events"**.
 
 ### Latest run (synthetic data, 3-year run, test slice)
 
@@ -336,7 +348,7 @@ Stated openly, because this project's value depends on being truthful.
 6. **Noisy per-model reasons** when errors are about zero. To be suppressed.
 7. **Globe is mouse-driven.** A keyboard location select is the accessible alternative.
 8. **No real data yet.** `providers/openmeteo.py` is not written.
-9. `db/`, `docs/`, `scripts/` are placeholders.
+9. `db/` and `scripts/` are placeholders. Database schema and deployment files are not written yet.
 
 ---
 
@@ -397,7 +409,8 @@ WEAVIA/
 │   ├── components/            # Globe, Command, Why, Regime, Models, Autopsy, Lab, ui
 │   └── lib/                   # api, store, useApi, format
 ├── db/                        # planned
-├── docs/                      # planned
+├── docs/                      # PRD, ARCHITECTURE, VERIFICATION, API, FRONTEND_WORK
+├── LICENSE                    # MIT
 └── scripts/                   # planned
 ```
 
