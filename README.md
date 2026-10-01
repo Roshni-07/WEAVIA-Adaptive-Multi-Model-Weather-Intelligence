@@ -19,9 +19,8 @@
 ![React Three Fiber](https://img.shields.io/badge/R3F-GLOBE-1A1A1A?labelColor=555555&style=flat-square&logo=threedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TYPESCRIPT-STRICT-3178C6?labelColor=555555&style=flat-square&logo=typescript&logoColor=white)
 
-[🚀 Live Demo](REPLACE_WITH_LIVE_DEMO_URL) ·
 [🎥 Intro Video](#-intro-video) ·
-[📄 PRD](REPLACE_WITH_PRD_URL) ·
+[📄 PRD](docs/WEAVIA_MVP_Master_Blueprint.md) ·
 [🧩 Architecture](#3-how-it-works) ·
 [🛠️ Tech Stack](#11-technology) ·
 [📊 Results](#6-verification-and-results) ·
@@ -41,7 +40,7 @@
 *A short walkthrough of the problem statement and our solution.*
 
 <!-- Replace with your video. YouTube: [![WEAVIA intro](https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=VIDEO_ID) -->
-[▶️ Watch the intro video](REPLACE_WITH_VIDEO_URL)
+▶️ *Video coming soon.*
 
 ---
 
