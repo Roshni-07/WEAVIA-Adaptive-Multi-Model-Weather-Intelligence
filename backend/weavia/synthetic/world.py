@@ -56,6 +56,11 @@ def _episodes(rng, times: pd.DatetimeIndex, per_year: float, dur: tuple[int, int
     return out
 
 
+# Heat spells: enough per year that the >= 38 degC event is observed often enough to fit and verify an event model
+HEAT_PER_YEAR = 4.0
+HEAT_AMP = (4.5, 8.0)
+
+
 class SyntheticWorld:
     def __init__(self, seed: int = 7, start: str = "2023-01-01", days: int = 731):
         self.seed = seed
@@ -73,7 +78,7 @@ class SyntheticWorld:
         regions = sorted({l.region for l in LOCATIONS})
         z_reg = {r: _ar1(rng, n, 0.92) for r in regions}
         cyc_reg = {r: _episodes(rng, times, 2.2, (8, 16), [(100, 160), (280, 340)]) for r in regions}
-        heat_reg = {r: _episodes(rng, times, 3.0, (12, 28), [(85, 175)]) * rng.uniform(3.5, 7.0) for r in regions}
+        heat_reg = {r: _episodes(rng, times, HEAT_PER_YEAR, (12, 28), [(85, 175)]) * rng.uniform(*HEAT_AMP) for r in regions}
 
         frames = []
         for loc in LOCATIONS:

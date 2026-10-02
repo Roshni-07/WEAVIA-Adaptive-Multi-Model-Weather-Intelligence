@@ -18,8 +18,8 @@ Issue dates are split chronologically, never randomly.
 
 | Slice | Share | Used for |
 |---|---|---|
-| Train | 60% | Skill memory, inverse-error baseline, meta-model fitting, regime classifier |
-| Validation | 15% | Trust temperature, uncertainty calibration, event model tuning |
+| Train | 60% | Skill memory, inverse-error baseline, meta-model fitting, regime classifier, calibration (with validation) |
+| Validation | 15% | Trust-temperature selection. Also pooled with train for uncertainty calibration and event-model cross-fitting |
 | Test | 25% | **Verification only** |
 
 Leads evaluated: 6, 12, 24, 48, 72 hours. Variables: rain, temperature, wind.
@@ -47,51 +47,70 @@ Every method is scored on the same test cases.
 
 ## 5. Latest results (synthetic, 3-year run, test slice)
 
-| Variable | MAE change vs equal ensemble | 95% CI | Significant |
-|---|---|---|---|
-| Rain | −42.3% | 38.6 to 46.2 | Yes |
-| Temperature | −34.4% | 33.3 to 35.5 | Yes |
-| Wind | −14.6% | 13.9 to 15.3 | Yes |
+| Variable | MAE change vs equal ensemble | 95% CI | vs inverse-error | vs best single (train-selected) |
+|---|---|---|---|---|
+| Rain | −38.0% | 33.3 to 42.5 | −32.0% (27.0 to 36.6) | −38.7% (35.3 to 42.3) |
+| Temperature | −34.3% | 33.2 to 35.3 | −24.2% (23.4 to 25.1) | −35.5% (34.6 to 36.3) |
+| Wind | −15.0% | 14.3 to 15.7 | −10.2% (9.5 to 10.8) | −28.5% (27.7 to 29.3) |
 
-| Regime classifier | Value |
-|---|---|
-| Test accuracy | 0.914 |
-| Majority-class baseline | 0.851 |
+All intervals exclude zero. Regime classifier test accuracy: **0.920** against 0.844 for always predicting the majority regime.
 
 **Reading this correctly:** the synthetic world was built so that models have different strengths in different contexts. A system that learns context should win there. That confirms the machinery can find and use that structure. It says nothing yet about whether real models have exploitable, stable structure.
 
+**Why the rain figure moved from −42.3% to −38.0%:** the synthetic world was regenerated with more heat spells, which changes the random stream. The two intervals overlap, so this is not a method regression or gain. Do not compare single runs as if they were an experiment.
+
+### Extreme events (test slice)
+
+| Event | Observed events | WEAVIA F1 (precision / recall) | Equal-ensemble F1 | Brier skill score |
+|---|---|---|---|---|
+| Rain ≥ 20 mm | 326 | 0.67 (0.69 / 0.65) | 0.59 | 0.57 |
+| Temperature ≥ 38 °C | 52 | 0.81 (0.72 / 0.92) | 0.67 | 0.67 |
+| Wind ≥ 30 km/h | 285 | 0.88 (0.90 / 0.86) | 0.79 | 0.81 |
+
+**No confidence intervals on event metrics yet**, so no claim of significance is made. Heat has 52 events, but they cluster in a few spells at 9 stations, so the number of independent episodes is much smaller. Treat the heat result as indicative.
+
 ## 6. Uncertainty verification
 
-Nominal P10–P90 coverage is 80%. Realised coverage on the test slice:
+Nominal P10–P90 coverage is 80%.
 
-| Variable | Realised coverage |
-|---|---|
-| Rain | 71–79% across leads, below nominal |
+| Lead (h) | Rain, all cases | Rain, **non-dry** forecasts | Non-dry mean width (mm) | Temperature | Wind |
+|---|---|---|---|---|---|
+| 6 | 87.3% | 75.9% | 3.8 | 76.2% | 76.6% |
+| 12 | 85.9% | 75.7% | 4.3 | 75.8% | 77.7% |
+| 24 | 86.2% | 75.8% | 4.9 | 77.3% | 79.0% |
+| 48 | 85.4% | 74.0% | 5.7 | 79.0% | 78.4% |
+| 72 | 86.0% | 74.1% | 6.1 | 80.0% | 78.8% |
 
-Known failures, stated openly:
+**Use the non-dry column for rain.** Dry forecasts get a near-zero-width interval that trivially contains an observed 0, which inflates the "all cases" figure.
 
-- **Rain intervals are too narrow.** In one autopsy case the observation was 98 mm against a band of about 26.5 to 26.6 mm. Rain is heavy-tailed, and spread-based scaling underestimates it.
-- **Confidence is overconfident and poorly spread.** Rain mean confidence is 0.99 against 0.95 realised.
+### What was fixed
 
-Planned fix: quantile or conformal calibration on `log1p(rain)`, then re-check coverage per lead.
+The earlier rain interval had a width of about 0.01 mm, because one normalised-residual quantile was shared by dry and wet cases. Rain residuals are now taken on the `log1p` scale and calibrated per forecast-amount bin and lead. Dry forecasts get a point interval and wet forecasts get a wide, skewed one. Calibration now uses train plus validation, because the validation block alone contains no monsoon (a calibration slice must contain every season).
+
+### What is still wrong
+
+- **Wet-case coverage is 74–76%, not 80%.** The test period is wetter than the calibration period, so calibrated spreads are slightly too narrow. Rolling-window recalibration (60, 120 and 240 days) was tried and did not close the gap. Adding regime, location or spread cells did not help either.
+- **Rain confidence is overconfident in the middle.** Forecasts with confidence 0.4–0.6 are right 42.8% of the time (mean confidence 0.538). Confidence 0.6–0.8 is right 60.6% (mean 0.697). High confidence (0.8–1.0) is well calibrated: 0.990 against 0.986 realised.
+- Temperature and wind confidence run slightly **under**, not over (for example wind 0.6–0.8: mean 0.743, realised 0.827).
 
 ## 7. Leakage controls
 
-| Control | How |
-|---|---|
-| Chronological split | No random shuffling across time |
-| Skill memory | Built from the train period only |
-| Inverse-error baseline | Fit on train only |
-| Error memory | 1-day lag so a case never sees its own outcome |
-| Regime probabilities on train | Out-of-fold |
-| Calibration | Validation slice, never test |
+| Control | How | Automated test |
+|---|---|---|
+| Chronological split | No random shuffling across time | Pipeline design |
+| Skill memory | Train period only | Pipeline design |
+| Inverse-error baseline | Fit on train only | Pipeline design |
+| Error memory | A lead-L forecast is verified at issue + L, so a case only uses cases already verified (lag of at least one issue) | **Yes.** Changing one outcome must not change memory of any case that could not yet see it. Checked at all five leads. Confirmed to fail when a leak is injected |
+| Regime probabilities on train | Out-of-fold | Pipeline design |
+| Uncertainty calibration | Train + validation only, never test | Pipeline design |
+| Event model | Time-blocked cross-fitting on train + validation, never test | Test checks blocks and outputs |
 
-Automated tests for these controls are **not written yet**. They are on the roadmap: error-memory no-leakage, harmonize round trip, bootstrap.
+Other automated checks: unit conversion round trips, validation of bad frames, bootstrap detects a real 20% improvement and does not invent one from noise, rain intervals are non-degenerate and cover about 80% on held-out synthetic data, and the rate limiter. 40 tests in total.
 
 ## 8. What would count as real evidence
 
-1. A provider for real forecast and observation history behind the existing interface.
-2. The same protocol, same baselines, same bootstrap, on real data.
+1. A provider for real forecast and observation history behind the existing interface. Plan and data limits: [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md).
+2. The same protocol, same baselines, same bootstrap, on real data, scored against an **independent** observation source (not reanalysis built from the models).
 3. Confidence intervals that exclude zero on real data, reported by context.
 4. Interval coverage near nominal after calibration.
 

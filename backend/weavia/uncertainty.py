@@ -1,14 +1,33 @@
-"""Uncertainty from model disagreement, calibrated on held-out residuals.
+"""Uncertainty calibrated on verified residuals.
 
-z = (obs - blend) / (weighted_spread + floor). Empirical quantiles/CDF of z per (variable, lead) on the
-validation slice give P10/P50/P90, a confidence = P(|error| <= tol), and exceedance probabilities.
-Everything is reported with realised coverage on the untouched test slice (verify.py).
+Rain (zero-inflated, heavy-tailed): residuals are taken on the log1p scale,
+    r = log1p(obs) - log1p(blend),
+and calibrated per (variable, lead, blend-level bin). Binning by forecast level is what lets a
+"dry" forecast get a (near) point interval while a wet forecast gets a wide, skewed one; pooling
+them, as a single normalised-residual quantile does, collapses the rain interval to ~zero width.
+P10/P50/P90 are back-transformed with expm1; confidence = P(|error| <= tol) and exceedance
+probabilities come from the same conditional residual distribution.
+
+Temperature / wind: z = (obs - blend) / (weighted_spread + floor), empirical quantiles per lead.
+
+The calibration slice must contain every season. A chronological validation block can miss one
+entirely (the synthetic validation block has no monsoon), so the pipeline fits on train + validation.
+Realised coverage is always verified on the untouched test slice (verify.py), reported both overall
+and for "wet" forecasts, because an overall figure is inflated by trivially covered dry cases.
 """
 from __future__ import annotations
 
 import numpy as np
 
 from .config import EVENT_THRESH, LEADS, SPREAD_FLOOR, tolerance
+
+RAIN_EDGES = np.array([0.05, 0.5, 2.0, 8.0])   # forecast mm/6h bin edges: dry | trace | light | moderate | heavy
+N_RAIN_BINS = len(RAIN_EDGES) + 1
+MIN_CELL = 100                                  # smallest cell trusted before pooling over leads / bins
+
+
+def rain_bin(blend: np.ndarray) -> np.ndarray:
+    return np.digitize(blend, RAIN_EDGES)
 
 
 def weighted_spread(F: np.ndarray, w: np.ndarray) -> np.ndarray:
@@ -21,8 +40,12 @@ class UncertaintyCalibrator:
         self.q: dict = {}
         self.z_sorted: dict = {}
         self.absz_sorted: dict = {}
+        self.r_cells: dict = {}      # rain: (lead|None, bin|None) -> sorted log1p residuals
 
+    # ------------------------------------------------------------------ fit
     def fit(self, var: str, lead: np.ndarray, blend: np.ndarray, spread: np.ndarray, obs: np.ndarray):
+        if var == "rain":
+            return self._fit_rain(lead, blend, obs)
         c = SPREAD_FLOOR[var]
         z = (obs - blend) / (spread + c)
         for L in LEADS:
@@ -33,7 +56,31 @@ class UncertaintyCalibrator:
             self.z_sorted[(var, L)] = np.sort(zz)
             self.absz_sorted[(var, L)] = np.sort(np.abs(zz))
 
+    def _fit_rain(self, lead, blend, obs):
+        r = np.log1p(obs) - np.log1p(blend)
+        bi = rain_bin(blend)
+        cells = {}
+        for L in LEADS + [None]:
+            for k in list(range(N_RAIN_BINS)) + [None]:
+                m = np.ones(len(r), bool)
+                if L is not None:
+                    m &= lead == L
+                if k is not None:
+                    m &= bi == k
+                cells[(L, k)] = np.sort(r[m])
+        self.r_cells = cells
+
+    def _cell(self, L: int, k: int) -> np.ndarray:
+        for key in ((L, k), (None, k), (L, None), (None, None)):
+            a = self.r_cells.get(key)
+            if a is not None and len(a) >= MIN_CELL:
+                return a
+        return self.r_cells[(None, None)]
+
+    # ------------------------------------------------------------------ apply
     def apply(self, var: str, lead: np.ndarray, blend: np.ndarray, spread: np.ndarray):
+        if var == "rain":
+            return self._apply_rain(lead, blend)
         c = SPREAD_FLOOR[var]
         scale = spread + c
         p10, p50, p90, conf, pev = (np.zeros(len(blend)) for _ in range(5))
@@ -52,6 +99,31 @@ class UncertaintyCalibrator:
             zs = self.z_sorted[(var, L)]
             x = (thr - blend[m]) / scale[m]
             pev[m] = 1.0 - np.searchsorted(zs, x, side="right") / len(zs)
-        if var in ("rain", "wind"):
+        if var == "wind":
             p10, p50, p90 = (np.maximum(a, 0.0) for a in (p10, p50, p90))
+        return p10, p50, p90, conf, pev
+
+    def _apply_rain(self, lead, blend):
+        n = len(blend)
+        p10, p50, p90, conf, pev = (np.zeros(n) for _ in range(5))
+        tb = np.log1p(blend)
+        bi = rain_bin(blend)
+        tol = tolerance("rain", blend)
+        lt = np.log1p(EVENT_THRESH["rain"])
+        for L in LEADS:
+            for k in range(N_RAIN_BINS):
+                m = (lead == L) & (bi == k)
+                if not m.any():
+                    continue
+                a = self._cell(L, k)
+                q10, q50, q90 = np.quantile(a, [0.1, 0.5, 0.9])
+                p10[m] = np.expm1(tb[m] + q10)
+                p50[m] = np.expm1(tb[m] + q50)
+                p90[m] = np.expm1(tb[m] + q90)
+                # no lower constraint when blend - tol <= 0: rain cannot be negative, so every residual below is a hit
+                lo = np.where(blend[m] - tol[m] <= 0.0, -np.inf, np.log1p(np.maximum(blend[m] - tol[m], 0.0)) - tb[m])
+                hi = np.log1p(blend[m] + tol[m]) - tb[m]
+                conf[m] = (np.searchsorted(a, hi, side="right") - np.searchsorted(a, lo, side="left")) / len(a)
+                pev[m] = 1.0 - np.searchsorted(a, lt - tb[m], side="left") / len(a)
+        p10, p50, p90 = (np.maximum(x, 0.0) for x in (p10, p50, p90))
         return p10, p50, p90, conf, pev

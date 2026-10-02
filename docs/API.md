@@ -31,6 +31,7 @@ uvicorn weavia.api.main:app --port 8000
 |---|---|
 | 404 | Unknown location, issue date outside served range, or unknown event id |
 | 422 | Invalid `lead`, `variable`, or lab weights |
+| 429 | Rate limit exceeded. Honour the `Retry-After` header (seconds) |
 | 503 | Artifacts missing. Run the pipeline. `GET /health` reports this as `status: no_artifacts` instead of failing |
 
 ## Routes
@@ -180,3 +181,9 @@ curl -X POST "http://localhost:8000/api/v1/lab/simulate" \
 |---|---|---|
 | `WEAVIA_DATA` | `data` | Artifact directory the API reads |
 | `WEAVIA_CORS` | `*` | Comma-separated allowed origins. Restrict before any public deployment |
+| `WEAVIA_RATE_LIMIT` | `120` | Requests per minute per client, all routes except `/health`. `0` disables |
+| `WEAVIA_LAB_RATE_LIMIT` | `20` | Requests per minute per client for `POST /lab/simulate`. `0` disables |
+| `WEAVIA_TRUST_PROXY` | off | Set `1` when a proxy (including the Next.js rewrite) sits in front of the API. Without it every user shares the proxy's single limit bucket |
+| `WEAVIA_PROXY_HOPS` | `1` | Trusted proxies in front of the API. The client is read from `X-Forwarded-For` counted from the right, so client-supplied entries on the left cannot spoof the limit |
+
+The limiter is in-memory and per process. Responses carry `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy` headers.

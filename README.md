@@ -68,6 +68,9 @@
 | [Architecture](docs/ARCHITECTURE.md) | Pipeline stages, modules, provider contract, artifacts |
 | [Verification](docs/VERIFICATION.md) | Test protocol, baselines, bootstrap method, results, known gaps |
 | [API reference](docs/API.md) | All 14 routes, parameters, errors, examples |
+| [Real-data plan](docs/REAL_DATA_PLAN.md) | Sources, history limits, ground truth, live-cycle design |
+| [Data, privacy and use](docs/PRIVACY_AND_USE.md) | What is collected (nothing), intended use, licence |
+| [Security policy](SECURITY.md) | Reporting, built-in protections, known limits |
 | [Frontend work log](docs/FRONTEND_WORK.md) | Frontend build notes |
 
 ---
@@ -117,7 +120,7 @@ The problem statement lists five expected outcomes. This is how WEAVIA addresses
 | Dynamically blended forecast | Context-aware adaptive blending of multiple sources (rain, temperature, wind) | 🟢 Implemented (synthetic sources) |
 | Model weight maps | Globe/map of dominant-model trust and per-model weights, served from `/map` and `/trust` | 🟢 Implemented |
 | Improved forecast skill vs individual models | Baseline-vs-adaptive verification with bootstrap confidence intervals | 🟢 Machinery implemented, 🟡 real-data proof pending |
-| Extreme-weather guidance (heavy rain, heat wave, high wind) | Event models with uncertainty and false-alarm/miss reporting | 🟡 Heavy rain and high wind work, heat event model blocked (too few synthetic heat events) |
+| Extreme-weather guidance (heavy rain, heat wave, high wind) | Event models with uncertainty and false-alarm/miss reporting | 🟢 Rain, temperature and wind event models fitted and verified (point estimates, no event CIs yet) |
 | Operational workflow / dashboard | One-command pipeline + FastAPI service + Next.js command center | 🟢 Implemented |
 
 Additional SIH requirements, region-aware, season-aware, lead-time-aware, and regime-aware weighting, are handled by the Trust and Regime engines (Section 5).
@@ -192,13 +195,13 @@ Legend: 🟢 Implemented · 🟡 In progress · 🔵 Planned · ⚪ Mock / synth
 | Regime detection | 🟢 | |
 | Trust engine (skill × context, recent error) | 🟢 | |
 | Blending (equal, inverse-error, adaptive) | 🟢 | |
-| Uncertainty (spread, intervals, confidence) | 🟡 | Rain intervals too narrow, see [Known limitations](#8-known-limitations) |
-| Extreme-event models | 🟡 | Rain and wind done, temperature/heat blocked on data |
+| Uncertainty (spread, intervals, confidence) | 🟡 | Rain intervals now have real width. Wet-case coverage still 74–76% vs 80% nominal, see [Known limitations](#8-known-limitations) |
+| Extreme-event models | 🟢 | Rain, temperature, wind. Time-blocked cross-fit on train + validation |
 | Verification (bootstrap CIs vs baselines) | 🟢 | |
 | Explain, Autopsy, Lab modules | 🟢 | |
 | Parquet store + pipeline | 🟢 | ~135 s for a 3-year synthetic run |
-| FastAPI service (14 routes under `/api/v1`) | 🟢 | Pydantic models, 422/404 validation, CORS |
-| Test suite | 🟡 | API tests pass (6). Leakage, harmonize round-trip and bootstrap tests still to add |
+| FastAPI service (14 routes under `/api/v1`) | 🟢 | Pydantic models, 422/404 validation, CORS, per-client rate limiting, security headers |
+| Test suite | 🟢 | 43 tests: API, error-memory leakage, harmonize round trip, bootstrap, rain calibration, event model, rate limiter |
 | Real data provider (Open-Meteo) | 🔵 | Per-model history depth to be checked first |
 | PostgreSQL/PostGIS, Redis, Celery, docker-compose | 🔵 | |
 
@@ -278,10 +281,13 @@ Improvements are reported with **paired, date-block bootstrap confidence interva
 
 | Metric | Result |
 |---|---|
-| Regime classification accuracy | **0.914** vs 0.851 majority-class baseline |
-| Rain MAE vs equal ensemble | **−42.3%** (CI −38.6 to −46.2) |
-| Temperature MAE vs equal ensemble | **−34.4%** (CI −33.3 to −35.5) |
-| Wind MAE vs equal ensemble | **−14.6%** (CI −13.9 to −15.3) |
+| Regime classification accuracy | **0.920** vs 0.844 majority-class baseline |
+| Rain MAE vs equal ensemble | **−38.0%** (95% CI 33.3 to 42.5) |
+| Temperature MAE vs equal ensemble | **−34.3%** (95% CI 33.2 to 35.3) |
+| Wind MAE vs equal ensemble | **−15.0%** (95% CI 14.3 to 15.7) |
+| Rain event F1 (≥ 20 mm, 326 events) | 0.67 vs 0.59 equal ensemble |
+| Heat event F1 (≥ 38 °C, 52 events) | 0.81 vs 0.67 equal ensemble |
+| Wind event F1 (≥ 30 km/h, 285 events) | 0.88 vs 0.79 equal ensemble |
 
 All CIs exclude 0. **These are synthetic-world results. They validate the pipeline, not real-world skill.** Real-data verification is the next milestone.
 
@@ -340,9 +346,9 @@ The frontend proxies `/api/v1/*` to `WEAVIA_API` (default `http://127.0.0.1:8000
 
 Stated openly, because this project's value depends on being truthful.
 
-1. **Rain intervals are too narrow.** The P10–P90 band is near zero width on some cases (one autopsy example: observed 98 mm against a band of about 26.5 mm). Coverage is 71–79% against an 80% nominal target. Fix planned: quantile/conformal calibration on `log1p`, heavy-tailed.
-2. **Confidence is overconfident and poorly spread** (rain mean 0.99 vs 0.95 realised).
-3. **No temperature extreme-event model yet.** The synthetic world has too few heat episodes to fit one. The UI shows n/a.
+1. **Rain intervals still under-cover wet cases.** Interval width is now real (about 4–6 mm for non-dry forecasts, was about 0.01). Coverage on non-dry forecasts is 74–76% against 80% nominal. Overall rain coverage reads 85–87%, but that is inflated by dry cases that are trivially covered, so the non-dry figure is the honest one. Cause: the test period is wetter than the calibration period (a distribution shift). Rolling-window recalibration did not fix it.
+2. **Rain confidence is overconfident in the middle.** Forecasts scored 0.4–0.8 confidence are right 43–61% of the time. High-confidence forecasts (0.8–1.0) are well calibrated (0.990 vs 0.986). Temperature and wind confidence run slightly under, not over.
+3. **Event metrics are point estimates.** No confidence intervals yet. Heat has 52 test events, but they cluster in a few spells across 9 stations, so far fewer independent episodes. Treat the heat F1 as indicative only.
 4. **No wind direction** in the pipeline, so the globe shows wind **speed only**. Wind particles would be fabricated, so they are not drawn.
 5. **Dry default view.** The latest issue date is dry, so globe layers look empty. A "jump to most active day" control is planned.
 6. **Noisy per-model reasons** when errors are about zero. To be suppressed.
@@ -356,8 +362,8 @@ Stated openly, because this project's value depends on being truthful.
 
 | # | Milestone | Why |
 |---|---|---|
-| 1 | **Uncertainty calibration**: conformal rain intervals, confidence spread, per-lead coverage, add heat episodes, add leakage/harmonize/bootstrap tests | Biggest science gap. Trust claims depend on it |
-| 2 | **Real data**: Open-Meteo provider behind the existing `ForecastProvider` interface, check per-model history depth first | Turns synthetic validation into real evidence |
+| 1 | ✅ **Uncertainty and tests**: log1p rain calibration by forecast level, train+val calibration, heat episodes, time-blocked event models, leakage/harmonize/bootstrap tests | Done. Wet-case coverage still 74–76% |
+| 2 | **Real data**: see [REAL_DATA_PLAN.md](docs/REAL_DATA_PLAN.md). Open-Meteo Previous Runs for 24/48/72 h, plus an independent truth source | Turns synthetic validation into real evidence |
 | 3 | **Wind u/v** in the pipeline, direction in `/map`, real wind particles, "most active day" jump | Visual completeness without faking |
 | 4 | **Infra**: `db/schema.sql`, docker-compose (PostgreSQL/PostGIS, Redis) | Operational deployment story |
 
@@ -389,6 +395,12 @@ Stated openly, because this project's value depends on being truthful.
 
 ---
 
+## Feedback and bug reports
+
+Open a GitHub Issue (bug report and suggestion templates are provided). Security problems: see [SECURITY.md](SECURITY.md). All data here is synthetic and the prototype is not for real weather decisions, see [docs/PRIVACY_AND_USE.md](docs/PRIVACY_AND_USE.md).
+
+---
+
 ## 12. Repository layout
 
 ```text
@@ -409,8 +421,10 @@ WEAVIA/
 │   ├── components/            # Globe, Command, Why, Regime, Models, Autopsy, Lab, ui
 │   └── lib/                   # api, store, useApi, format
 ├── db/                        # planned
-├── docs/                      # PRD, ARCHITECTURE, VERIFICATION, API, FRONTEND_WORK
+├── docs/                      # PRD, ARCHITECTURE, VERIFICATION, API, REAL_DATA_PLAN, PRIVACY_AND_USE, FRONTEND_WORK
+├── .github/ISSUE_TEMPLATE/    # bug report, suggestion
 ├── LICENSE                    # MIT
+├── SECURITY.md
 └── scripts/                   # planned
 ```
 

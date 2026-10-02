@@ -129,7 +129,9 @@ def run(out_dir: str | Path = "data", seed: int = 7, days: int = 1461, log=print
         spread = weighted_spread(F, w)
         lead = cx.lead_h.values
         obs_v = cx[f"obs_{var}"].values
-        calib.fit(var, lead[va_mask], blend[va_mask], spread[va_mask], obs_v[va_mask])
+        # calibrate on train + validation: the chronological validation block alone can miss a whole season
+        cal_mask = tr_mask | va_mask
+        calib.fit(var, lead[cal_mask], blend[cal_mask], spread[cal_mask], obs_v[cal_mask])
         p10, p50, p90, conf, pev_resid = calib.apply(var, lead, blend, spread)
         d = pd.DataFrame({
             "case_id": cx.case_id.values, "variable": var, "issue_time": cx.issue_time.values,
@@ -152,7 +154,7 @@ def run(out_dir: str | Path = "data", seed: int = 7, days: int = 1461, log=print
             d[f"recb_{m}"] = cx[f"recb_{var}_{m}"].values
         Xe = event_features(cx, d, proba)
         ye = (obs_v >= EVENT_THRESH[var]).astype(int)
-        evm.fit_var(var, Xe[tr_mask], ye[tr_mask], Xe[va_mask], ye[va_mask])
+        evm.fit_var(var, Xe[cal_mask], ye[cal_mask], d["issue_time"].values[cal_mask])
         d["event_prob"] = evm.predict(var, Xe)
         log(f"[events:{var}] {evm.fit_info[var]}")
         frames_b.append(d)

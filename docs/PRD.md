@@ -59,15 +59,15 @@ Forecasters and disaster managers need one forecast they can trust, with a clear
 | F2 | Detect weather regime from features | Done |
 | F3 | Score model trust by context and recent error | Done |
 | F4 | Blend with adaptive weights. Compare to equal and inverse-error baselines | Done |
-| F5 | Attach uncertainty (spread, intervals, confidence) | Partial. Rain intervals too narrow |
-| F6 | Extreme-event signals | Partial. Rain and wind done, heat blocked on data |
+| F5 | Attach uncertainty (spread, intervals, confidence) | Done, with a known gap: wet-case rain coverage 74–76% vs 80% |
+| F6 | Extreme-event signals | Done for rain, temperature, wind. Point estimates, no event CIs yet |
 | F7 | Verify against observations with bootstrap CIs | Done |
 | F8 | Explain each forecast from real weights and errors | Done |
 | F9 | Autopsy of forecast failures | Done |
 | F10 | Counterfactual Lab (live back-test of alternative weights) | Done |
 | F11 | REST API (14 routes under `/api/v1`) | Done |
 | F12 | Dashboard: globe, forecast, trust, regime, models, autopsy, lab | Done |
-| F13 | Real data provider (Open-Meteo) | Planned |
+| F13 | Real data provider (Open-Meteo) | Planned. See [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md) |
 | F14 | Wind direction and wind particles | Planned |
 | F15 | PostgreSQL/PostGIS, Redis, docker-compose | Planned |
 
@@ -93,7 +93,7 @@ Reported on a held-out test slice, by context, with bootstrap CIs.
 
 A claim of improvement requires the CI to exclude 0.
 
-**Current synthetic results:** regime accuracy 0.914 vs 0.851 majority. MAE vs equal ensemble: rain −42.3%, temperature −34.4%, wind −14.6%, all CIs excluding 0. Synthetic only.
+**Current synthetic results:** regime accuracy 0.920 vs 0.844 majority. MAE vs equal ensemble: rain −38.0%, temperature −34.3%, wind −15.0%, all CIs excluding 0. Synthetic only.
 
 **Exit criterion for a real-skill claim:** the same protocol run on real forecast and observation history, with CIs excluding 0.
 
@@ -101,16 +101,17 @@ A claim of improvement requires the CI to exclude 0.
 
 | Risk | Impact | Plan |
 |---|---|---|
-| Rain P10–P90 near zero width, coverage 71–79% vs 80% | Overconfident intervals | Conformal or quantile calibration on log1p |
-| Confidence overconfident (rain mean 0.99 vs 0.95 realised) | Misleading trust signal | Recalibrate and re-check spread per lead |
+| Wet-case rain coverage 74–76% vs 80% nominal (test period wetter than calibration) | Slightly narrow wet-case intervals | Real-data recalibration, rolling windows already tried without gain |
+| Rain confidence overconfident in the middle (0.4–0.8 band) | Misleading mid-range trust signal | Recalibrate confidence separately from the interval |
 | Synthetic data may flatter the method | Overstated skill | Real-data verification before any claim |
-| Per-model history depth on real sources unknown | Limits back-test length | Check before building the provider |
-| No temperature event model | Heat guidance missing | Add heat episodes, refit |
+| Open-Meteo archives give day-offset leads (24/48/72 h) over about 2.7 years, true per-run data only since April 2026 | Limits real back-test leads and length | Start with 24/48/72 h. See [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md) |
+| Reanalysis is not independent truth | Circular verification | Independent station or satellite truth, named on every result |
+| Event metrics lack confidence intervals | Event skill claims are weak | Add block bootstrap for events |
 | No wind direction | No wind particles | Add u/v to pipeline |
 
 ## 8. Roadmap
 
-1. **Uncertainty calibration** and missing tests (leakage, harmonize round trip, bootstrap).
+1. ✅ **Uncertainty calibration** and missing tests (done).
 2. **Real data:** Open-Meteo provider behind the existing interface.
 3. **Wind u/v**, wind particles, "most active day" control.
 4. **Infrastructure:** database schema, docker-compose, deployment for a live demo.

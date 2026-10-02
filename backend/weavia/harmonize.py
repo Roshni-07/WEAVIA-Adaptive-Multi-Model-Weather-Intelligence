@@ -52,12 +52,13 @@ class ValidationReport:
 
 
 def validate_frame(df: pd.DataFrame, model_id: str, max_nan: float = 0.02) -> ValidationReport:
-    rep = ValidationReport(model_id, len(df), float(df["value"].isna().mean()))
     missing = [c for c in SCHEMA if c not in df.columns]
     if missing:
+        rep = ValidationReport(model_id, len(df), float("nan"))
         rep.ok = False
         rep.issues.append(f"missing columns {missing}")
         return rep
+    rep = ValidationReport(model_id, len(df), float(df["value"].isna().mean()))
     if rep.nan_frac > max_nan:
         rep.ok = False
         rep.issues.append(f"NaN fraction {rep.nan_frac:.3f} > {max_nan}")

@@ -53,8 +53,8 @@
 | 4 | Regime | `regime.py`, `regime_labels.py` | Classifier over 8 regimes. Out-of-fold probabilities on train, full model on validation and test |
 | 5 | Skill memory | `pipeline.build_skill_table` | MAE, RMSE, bias per location × lead × season × regime × model × variable, **train period only** |
 | 6 | Trust and blend | `trust.py` | Meta-model predicts each model's expected error from context. Weights are a softmax of negative predicted error |
-| 7 | Uncertainty | `uncertainty.py` | P10/P50/P90 and confidence from model disagreement, calibrated on the validation slice |
-| 8 | Events | `events.py` | Event probability per variable, with alert thresholds |
+| 7 | Uncertainty | `uncertainty.py` | P10/P50/P90 and confidence. Rain on the log1p scale by forecast level, others from weighted spread. Calibrated on train + validation |
+| 8 | Events | `events.py` | Event probability per variable, time-blocked cross-fit, alert thresholds |
 | 9 | Verification | `verify.py` | Test slice only. Baselines, bootstrap CIs, coverage, regime metrics |
 | 10 | Artifacts | `pipeline.py` | Parquet tables, `meta.json`, `verification.json`, `models.joblib` |
 
@@ -71,7 +71,7 @@
 | Regimes | NORMAL, CONVECTIVE, HEAVY_RAIN, HEAT, HIGH_WIND, CYCLONIC, DRY, TRANSITION |
 | Seasons | WINTER, PRE_MONSOON, MONSOON, POST_MONSOON |
 | Event thresholds | rain ≥ 20 mm, temp ≥ 38 °C, wind ≥ 30 km/h (MVP proxies, configurable) |
-| Split (chronological) | 60% train / 15% validation (calibration) / 25% test |
+| Split (chronological) | 60% train / 15% validation / 25% test. Calibration uses train + validation |
 | Error memory | 1-day lag, 7-day recent window |
 
 ### Adaptive blending
@@ -88,11 +88,23 @@ $\hat{e}_i$ is the meta-model's predicted log absolute error for model $i$ in th
 
 ### Uncertainty
 
-Normalized residual on the validation slice:
+**Temperature and wind.** Normalised residual on the calibration slice:
 
 $$z = \frac{y - \hat{y}}{\sigma_w + c}$$
 
-with $\sigma_w$ the weight-aware model spread and $c$ a per-variable floor. Empirical quantiles of $z$ per variable and lead give P10/P50/P90. Confidence is the probability that absolute error stays within a variable-specific tolerance. Realised coverage on the test slice is reported honestly, including the current rain shortfall.
+with $\sigma_w$ the weight-aware model spread and $c$ a per-variable floor. Empirical quantiles of $z$ per variable and lead give P10/P50/P90. Confidence is the probability that absolute error stays within a variable-specific tolerance.
+
+**Rain** is zero-inflated and heavy-tailed, so it is calibrated on the log scale:
+
+$$r = \log(1+y) - \log(1+\hat{y})$$
+
+Residual distributions are stored per **lead × forecast-amount bin** (dry, trace, light, moderate, heavy; edges 0.05, 0.5, 2, 8 mm/6h), with fallback to pooled cells when a cell has fewer than 100 cases. Intervals, confidence and exceedance probability all come from the same conditional distribution, back-transformed with `expm1`. A dry forecast therefore gets a near-point interval and a heavy forecast a wide, right-skewed one.
+
+**Calibration slice:** train + validation. A chronological validation block can miss a whole season (the synthetic one has no monsoon), so calibrating on it alone starves the tails. Coverage is always verified on the untouched test slice, reported both overall and for non-dry rain forecasts.
+
+### Event models
+
+LightGBM classifier per variable, isotonic calibration, F1-optimal alert threshold. Isotonic calibration and the threshold are fit on **time-blocked out-of-fold predictions** over train + validation: issue dates are cut into five contiguous blocks and each block is predicted by a model fit on the other four. The final classifier is fit on all pooled rows. A variable with fewer than 30 calibration events is not fitted, and the UI says "too few events" instead.
 
 ## 5. Provider contract
 
@@ -132,6 +144,7 @@ Adding a real source (for example Open-Meteo) means writing one subclass. Harmon
 ```text
 backend/weavia/
 ├── api/main.py          FastAPI app, 14 routes, reads Store only
+├── api/ratelimit.py     Per-client rate limit and security headers (middleware)
 ├── store.py             Typed access to artifacts
 ├── pipeline.py          End-to-end run, artifact writer
 ├── config.py            Constants, units, thresholds
@@ -166,4 +179,4 @@ weavia-frontend/
 
 ## 9. Not built yet
 
-PostgreSQL/PostGIS, Redis, Celery, docker-compose, MapLibre, D3, Framer Motion, real data providers, wind direction. See the roadmap in the [README](../README.md).
+PostgreSQL/PostGIS, Redis, Celery, docker-compose, MapLibre, D3, Framer Motion, real data providers, wind direction. Real-data and live-cycle design: [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md). Roadmap: [README](../README.md).

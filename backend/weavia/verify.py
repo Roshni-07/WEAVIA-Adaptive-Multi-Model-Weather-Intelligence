@@ -151,7 +151,8 @@ def evaluate(blend: pd.DataFrame, skill: pd.DataFrame, regime_m: dict, alert_thr
             result["coverage"].append({
                 "variable": var, "lead_h": L, "nominal": 0.8, "inside_p10_p90": float(((o >= lo) & (o <= hi)).mean()),
                 "below_p10": float((o < lo).mean()), "above_p90": float((o > hi).mean()),
-                "mean_interval_width": float((hi - lo).mean())})
+                "mean_interval_width": float((hi - lo).mean())}
+                | _nondry_coverage(var, dv.blend.values[m], o, lo, hi))
         conf = dv.confidence.values
         hit = (np.abs(dv.obs.values - dv.blend.values) <= tolerance(var, dv.blend.values))
         bins = np.linspace(0, 1, 6)
@@ -163,6 +164,18 @@ def evaluate(blend: pd.DataFrame, skill: pd.DataFrame, regime_m: dict, alert_thr
                     "mean_confidence": float(conf[m].mean()), "realised": float(hit[m].mean())})
     result["data_mode"] = "synthetic"
     return result
+
+
+def _nondry_coverage(var, blend, o, lo, hi) -> dict:
+    """Rain only: coverage on non-dry forecasts. Overall coverage is inflated by dry cases whose
+    zero-width interval trivially contains an observed 0, so this is the honest figure."""
+    if var != "rain":
+        return {}
+    nd = blend >= 0.05
+    if nd.sum() < 30:
+        return {"n_nondry": int(nd.sum()), "inside_p10_p90_nondry": None, "mean_interval_width_nondry": None}
+    return {"n_nondry": int(nd.sum()), "inside_p10_p90_nondry": float(((o >= lo) & (o <= hi))[nd].mean()),
+            "mean_interval_width_nondry": float((hi - lo)[nd].mean())}
 
 
 def _prf(pred: np.ndarray, obs: np.ndarray) -> dict:

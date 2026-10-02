@@ -14,6 +14,7 @@ from ..autopsy import AUTOPSY_LEADS, autopsy as run_autopsy, list_events
 from ..config import BLEND_VARS, CANON_UNIT, EVENT_THRESH, LEADS, MODELS, REGIMES, VAR_LABEL
 from ..explain import explain as run_explain, skill_agg
 from ..lab import simulate
+from .ratelimit import RateLimitMiddleware
 from ..locations import LOC_BY_ID, LOCATIONS
 from ..store import Store
 
@@ -21,6 +22,7 @@ DATA_DIR = os.environ.get("WEAVIA_DATA", "data")
 app = FastAPI(title="WEAVIA API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("WEAVIA_CORS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(RateLimitMiddleware)     # added last = outermost: 429s still carry CORS headers
 _store: Store | None = None
 
 
