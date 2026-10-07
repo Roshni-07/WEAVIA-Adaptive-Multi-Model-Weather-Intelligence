@@ -161,6 +161,35 @@ def test_rain_confidence_is_calibrated_and_falls_with_forecast_amount():
     assert abs(pev.mean() - ev.mean()) < 0.01
 
 
+def test_calibrator_ignores_non_finite_rows_instead_of_being_poisoned():
+    lead, blend, spread, obs = _rain_world(n=20000)
+    blend_bad = blend.copy()
+    blend_bad[::7] = np.nan                                                # forecast gaps, as real feeds have
+    cal = UncertaintyCalibrator()
+    cal.fit("rain", lead, blend_bad, spread, obs)
+    p10, p50, p90, conf, pev = cal.apply("rain", lead, blend, spread)
+    for a in (p10, p50, p90, conf, pev):
+        assert np.isfinite(a).all()
+    assert (p90 - p10)[blend > 8].mean() > 2.0
+
+
+def test_cases_with_a_missing_forecast_are_dropped_not_scored():
+    from weavia.features import build_cases
+    rows = []
+    for m in MODELS:
+        for var in ("rain", "temp", "wind", "rh", "pressure"):
+            for t in range(3):
+                val = np.nan if (m == MODELS[0] and var == "rain" and t == 1) else 1.0
+                rows.append(("2024-01-0%d" % (t + 1), "2024-01-0%d" % (t + 2), 24, "blr", var, val, m))
+    fc = pd.DataFrame(rows, columns=["issue_time", "valid_time", "lead_h", "location_id", "variable", "value", "model_id"])
+    for c in ("issue_time", "valid_time"):
+        fc[c] = pd.to_datetime(fc[c], utc=True)
+    obs = fc[fc.model_id == MODELS[1]].rename(columns={"valid_time": "timestamp"})[["timestamp", "location_id", "variable", "value"]]
+    regime = pd.DataFrame({"valid_time": sorted(fc.valid_time.unique()), "location_id": "blr", "obs_regime": "NORMAL"})
+    cx = build_cases(fc, obs, regime, use_issue_obs=False)
+    assert len(cx) == 2 and cx[[f"f_rain_{m}" for m in MODELS]].notna().all().all()
+
+
 # --------------------------------------------------------------------- event model
 def _event_data(n_days=120, per_day=40, seed=5, rate=0.08):
     rng = np.random.default_rng(seed)

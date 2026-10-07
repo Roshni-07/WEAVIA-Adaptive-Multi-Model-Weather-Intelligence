@@ -72,10 +72,8 @@ def build_events(blend: pd.DataFrame) -> pd.DataFrame:
 
 
 def run(out_dir: str | Path = "data", seed: int = 7, days: int = 1461, log=print) -> dict:
+    """Synthetic development run: providers -> harmonise -> run_from_sources."""
     t0 = time.time()
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-
     # 1. data (synthetic providers behind the real provider interface)
     world = SyntheticWorld(seed=seed, days=days)
     spec = FetchSpec(LOCATIONS)
@@ -89,9 +87,29 @@ def run(out_dir: str | Path = "data", seed: int = 7, days: int = 1461, log=print
     fc = harmonize(frames)
     obs = SyntheticObservationProvider(world).fetch(spec)
     log(f"[data] forecasts {len(fc):,} rows, observations {len(obs):,} rows ({time.time()-t0:.0f}s)")
+    meta_extra = {
+        "data_mode": "synthetic",
+        "data_notice": ("SYNTHETIC DEVELOPMENT DATA. Four synthetic models with designed context-dependent errors. "
+                        "Verification numbers validate the WEAVIA pipeline; they are NOT evidence of real-world forecast skill."),
+        "seed": seed, "models": metas, "validation_reports": reports, "truth_source": "synthetic truth",
+    }
+    return run_from_sources(out_dir, fc, obs, world.regime_obs(), world.truth, meta_extra, seed=seed, log=log, t0=t0)
+
+
+def run_from_sources(out_dir, fc: pd.DataFrame, obs: pd.DataFrame, regime_obs: pd.DataFrame, truth: pd.DataFrame,
+                     meta_extra: dict, seed: int = 7, log=print, use_issue_obs: bool = True, save_full: bool = False,
+                     t0: float | None = None) -> dict:
+    """Everything after data acquisition. Synthetic and real data share this code path, unchanged.
+
+    fc: harmonised long forecasts. obs: canonical long observations. regime_obs: observed regime per valid time.
+    meta_extra must carry data_mode, data_notice, models, validation_reports, truth_source.
+    use_issue_obs=False removes the dependence on an observation at issue time (needed when truth lags)."""
+    t0 = t0 or time.time()
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
 
     # 2. cases + error memory
-    cx = build_cases(fc, obs, world.regime_obs())
+    cx = build_cases(fc, obs, regime_obs, use_issue_obs=use_issue_obs)
     tr_mask = (cx.split == "train").values
     va_mask = (cx.split == "val").values
     te_mask = (cx.split == "test").values
@@ -176,19 +194,18 @@ def run(out_dir: str | Path = "data", seed: int = 7, days: int = 1461, log=print
     proba_df.to_parquet(out / "regime_proba.parquet")
     skill.to_parquet(out / "skill.parquet")
     events.to_parquet(out / "events.parquet")
-    world.truth.to_parquet(out / "truth.parquet")
+    truth.to_parquet(out / "truth.parquet")
+    if save_full:
+        cx.to_parquet(out / "cases_full.parquet")
     joblib.dump({"trust": trust, "calib": calib, "regime": rd, "events": evm}, out / "models.joblib")
     cut = cx.groupby("split")["issue_time"].agg(["min", "max"])
     meta = {
-        "data_mode": "synthetic",
-        "data_notice": ("SYNTHETIC DEVELOPMENT DATA. Four synthetic models with designed context-dependent errors. "
-                        "Verification numbers validate the WEAVIA pipeline; they are NOT evidence of real-world forecast skill."),
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "seed": seed, "models": metas, "validation_reports": reports,
         "splits": {k: {"start": str(v["min"]), "end": str(v["max"])} for k, v in cut.iterrows()},
         "tau": trust.tau, "event_model": evm.fit_info, "alert_thr": evm.alert_thr, "thresholds": EVENT_THRESH, "units": CANON_UNIT,
-        "leads": LEADS, "n_cases": int(len(cx)), "locations": [l.__dict__ for l in LOCATIONS],
+        "leads": list(LEADS), "model_ids": list(MODELS), "n_cases": int(len(cx)), "locations": [l.__dict__ for l in LOCATIONS],
         "model_version": "weavia-meta-lgbm-0.1",
+        **meta_extra,
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
     (out / "verification.json").write_text(json.dumps(ver, indent=2, default=str))

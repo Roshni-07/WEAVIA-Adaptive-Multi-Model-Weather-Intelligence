@@ -44,6 +44,9 @@ class UncertaintyCalibrator:
 
     # ------------------------------------------------------------------ fit
     def fit(self, var: str, lead: np.ndarray, blend: np.ndarray, spread: np.ndarray, obs: np.ndarray):
+        ok = np.isfinite(blend) & np.isfinite(spread) & np.isfinite(obs)    # never calibrate on gaps
+        if not ok.all():
+            lead, blend, spread, obs = lead[ok], blend[ok], spread[ok], obs[ok]
         if var == "rain":
             return self._fit_rain(lead, blend, obs)
         c = SPREAD_FLOOR[var]

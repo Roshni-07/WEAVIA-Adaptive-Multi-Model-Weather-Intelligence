@@ -27,7 +27,7 @@ Because the app sets no cookies and runs no tracking, a cookie-consent banner is
 
 ## Third-party data (when real data is added)
 
-Real-data sources will have their own licences and attribution rules (for example, Open-Meteo data is CC BY 4.0). They will be listed here and in the README before the first real-data release.
+In real-data mode the **server** (not the browser) requests forecasts and reanalysis from Open-Meteo. Those requests carry station coordinates and no user information. Open-Meteo data is licensed CC BY 4.0: weather data by [Open-Meteo.com](https://open-meteo.com/). Check Open-Meteo's current terms before any public or commercial deployment, since the free tier is for non-commercial use. The browser still makes no third-party requests.
 
 ## Software licence
 

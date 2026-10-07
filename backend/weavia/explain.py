@@ -10,7 +10,6 @@ from .locations import LOC_BY_ID, REGION_LIST
 from .store import Store
 from .trust import BASE_FEATS
 
-M = len(MODELS)
 HUMAN = {
     "hist": "verified historical error", "rec": "recent 7-day error", "histb": "historical bias",
     "recb": "recent bias", "dev": "deviation from consensus", "abs_dev": "distance from consensus",
@@ -41,7 +40,7 @@ def rebuild_long(store: Store, loc_id: str, var: str, issue, lead: int):
     proba = store.proba_row(int(c["case_id"]))
     F = np.array([b[f"f_{m}"] for m in MODELS], dtype=float)
     ens, spread = F.mean(), F.std()
-    others = (F.sum() - F) / (M - 1)
+    others = (F.sum() - F) / (len(MODELS) - 1)
     rows = []
     for j, m in enumerate(MODELS):
         d = {"model_idx": j, "f": F[j], "ens": ens, "dev": F[j] - others[j], "abs_dev": abs(F[j] - others[j]),
@@ -124,22 +123,22 @@ def explain(store: Store, loc_id: str, var: str, issue, lead: int) -> dict:
         reasons = []
         if r_reg.get(m) == 1 and reg_sk[m]["mae"] is not None:
             reasons.append(f"lowest historical MAE in {reg_label} at +{lead}h ({reg_sk[m]['mae']:.2f} {unit} vs {mean_reg:.2f} model average)")
-        elif r_reg.get(m) == M and reg_sk[m]["mae"] is not None:
+        elif r_reg.get(m) == len(MODELS) and reg_sk[m]["mae"] is not None:
             reasons.append(f"highest historical MAE in {reg_label} at +{lead}h ({reg_sk[m]['mae']:.2f} {unit} vs {mean_reg:.2f} average)")
         if r_rec.get(m) == 1:
             reasons.append(f"smallest verified error over the last 7 days ({rec[m]:.2f} {unit})")
-        elif r_rec.get(m) == M and rec[m] is not None:
+        elif r_rec.get(m) == len(MODELS) and rec[m] is not None:
             reasons.append(f"largest verified error over the last 7 days ({rec[m]:.2f} {unit})")
         if r_dev.get(m) == 1:
             reasons.append("forecast sits closest to the multi-model consensus")
-        elif r_dev.get(m) == M:
+        elif r_dev.get(m) == len(MODELS):
             reasons.append(f"outlier: {absdev[m]:.2f} {unit} away from the other models' mean")
         if not reasons:
             reasons.append("mid-ranked on regime skill, recent error and consensus distance")
         models.append({
             "model_id": m, "name": mm["name"], "kind": mm["kind"], "label": mm["label"],
             "forecast": _f(F[m]), "weight": _f(w[m]), "weight_rank": w_rank[m],
-            "equal_weight": 1 / M, "inverse_error_weight": _f(wi[m]),
+            "equal_weight": 1 / len(MODELS), "inverse_error_weight": _f(wi[m]),
             "contribution": _f(w[m] * F[m]), "predicted_error": _f(pe),
             "regime_skill_mae": _f(reg_sk[m]["mae"]), "regime_skill_bias": _f(reg_sk[m]["bias"]),
             "regime_skill_n": reg_sk[m]["n"], "location_skill_mae": _f(loc_sk[m]["mae"]),

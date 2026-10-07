@@ -12,7 +12,9 @@ from pydantic import BaseModel, Field
 
 from ..autopsy import AUTOPSY_LEADS, autopsy as run_autopsy, list_events
 from ..config import BLEND_VARS, CANON_UNIT, EVENT_THRESH, LEADS, MODELS, REGIMES, VAR_LABEL
+from .. import imd_criteria
 from ..explain import explain as run_explain, skill_agg
+from ..extremes import jsonable, regional_outlook
 from ..lab import simulate
 from .ratelimit import RateLimitMiddleware
 from ..locations import LOC_BY_ID, LOCATIONS
@@ -27,7 +29,10 @@ _store: Store | None = None
 
 
 def S() -> Store:
+    """The current Store. Reloads when a live cycle has rewritten the artifacts (cheap stat check per request)."""
     global _store
+    if _store is not None and _store._sig != _store_sig():
+        _store = None
     if _store is None:
         try:
             _store = Store(DATA_DIR)
@@ -36,12 +41,40 @@ def S() -> Store:
     return _store
 
 
+def _store_sig() -> tuple:
+    from pathlib import Path
+    d = Path(DATA_DIR)
+    return tuple((d / f).stat().st_mtime_ns if (d / f).exists() else 0
+                 for f in ("blend.parquet", "cases.parquet", "live_status.json", "meta.json", "daily_extremes.parquet", "daily_verification.json"))
+
+
+STALE_AFTER_MIN = 9 * 60          # one 6 h cycle plus 3 h grace
+
+
+def live_block(st: Store) -> dict | None:
+    """Freshness of the live product, computed at request time. None for synthetic or never-cycled data."""
+    if st.live is None:
+        return None
+    out = dict(st.live)
+    try:
+        fetched = pd.Timestamp(out["fetched_at"])
+        age = (pd.Timestamp.now(tz="UTC") - fetched).total_seconds() / 60
+        out["age_minutes"] = round(age, 1)
+        out["stale"] = bool(age > STALE_AFTER_MIN) or out.get("state") == "failed"
+    except Exception:                                   # noqa: BLE001 - never let a bad status file break the API
+        out["age_minutes"], out["stale"] = None, True
+    return out
+
 def _f(x, nd=3):
     try:
         x = float(x)
     except (TypeError, ValueError):
         return None
     return None if np.isnan(x) else round(x, nd)
+
+
+def _regime_or_none(x):
+    return None if x is None or (isinstance(x, float) and np.isnan(x)) else str(x)
 
 
 def _ctx(issue: str | None, lead: int, var: str | None = None, loc: str | None = None):
@@ -54,7 +87,7 @@ def _ctx(issue: str | None, lead: int, var: str | None = None, loc: str | None =
         raise HTTPException(404, f"unknown location {loc}")
     t = st.parse_issue(issue)
     if t not in set(st.issues):
-        raise HTTPException(404, f"issue {t:%Y-%m-%d} not in served (test-slice) range {st.issues[0]:%Y-%m-%d}..{st.issues[-1]:%Y-%m-%d}")
+        raise HTTPException(404, f"issue {st.fmt_issue(t)} not in served range {st.fmt_issue(st.issues[0])}..{st.fmt_issue(st.issues[-1])}")
     return st, t
 
 
@@ -64,6 +97,8 @@ class Provenance(BaseModel):
     data_notice: str
     model_version: str
     generated_at: str
+    truth_source: str | None = None
+    live: dict[str, Any] | None = None
 
 
 class Meta(BaseModel):
@@ -106,7 +141,9 @@ class MapOut(BaseModel):
 def health():
     try:
         st = S()
-        return {"status": "ok", "model_version": st.meta["model_version"], "data_mode": st.meta["data_mode"]}
+        live = live_block(st)
+        status = "ok" if not (live and live["stale"]) else "stale"
+        return {"status": status, "model_version": st.meta["model_version"], "data_mode": st.meta["data_mode"], "live": live}
     except HTTPException as e:
         return {"status": "no_artifacts", "detail": e.detail}
 
@@ -116,8 +153,9 @@ def meta():
     st = S()
     m = st.meta
     return {
-        "provenance": {k: str(m[k]) for k in ("data_mode", "data_notice", "model_version", "generated_at")},
-        "issues": [f"{t:%Y-%m-%d}" for t in st.issues], "latest_issue": f"{st.latest_issue:%Y-%m-%d}",
+        "provenance": {**{k: str(m[k]) for k in ("data_mode", "data_notice", "model_version", "generated_at")},
+                       "truth_source": m.get("truth_source"), "live": live_block(st)},
+        "issues": [st.fmt_issue(t) for t in st.issues], "latest_issue": st.fmt_issue(st.latest_issue),
         "leads": LEADS,
         "variables": {v: {"label": VAR_LABEL[v], "unit": CANON_UNIT[v], "event_threshold": EVENT_THRESH[v]} for v in BLEND_VARS},
         "models": [{"model_id": k, **v} for k, v in m["models"].items()],
@@ -211,7 +249,7 @@ def regime(location_id: str, issue: str | None = None, lead: int = 24):
     reg = st.verification.get("regime")
     return {"location_id": location_id, "issue_time": t.isoformat(), "lead_h": lead, "label": REGIMES[int(order[0])],
             "confidence": _f(pr[order[0]]), "probabilities": {r: _f(pr[i], 4) for i, r in enumerate(REGIMES)},
-            "observed_regime": str(st.row(location_id, "temp", t, lead)["regime_obs"]),
+            "observed_regime": _regime_or_none(st.row(location_id, "temp", t, lead)["regime_obs"]),
             "classifier_verification": reg}
 
 
@@ -243,6 +281,70 @@ def skill_atlas(variable: str = "rain", lead: int = 24):
 def verification():
     st = S()
     return {"provenance": meta()["provenance"], "verification": st.verification, "splits": st.meta["splits"]}
+
+
+EXTREME_NOTE = ("Indicator, not an IMD declaration. Normals are reanalysis-based. Regions are WEAVIA's coarse groups, "
+                "not IMD sub-divisions.")
+
+
+def _no_extremes():
+    return HTTPException(404, "No daily extremes in this dataset. They are built by `python -m weavia.live fit` "
+                              "(real-data mode). Synthetic runs do not produce them.")
+
+
+@app.get("/api/v1/extremes")
+def extremes_view(issue: str | None = None, lead_day: int = Query(1, ge=1, le=3)):
+    """IMD-aligned daily guidance for one issue and lead day: heat-wave indicator per station (daily maximum vs the
+    station's normal and terrain class), 24 h rainfall class and heavy-rain probability, and a regional heat-wave
+    outlook across the issue's lead days."""
+    st = S()
+    if st.daily is None:
+        raise _no_extremes()
+    d = st.daily
+    live = d[d.split == "live"]
+    t = st.parse_issue(issue) if issue else (live.issue_time.max() if len(live) else st.latest_issue)
+    rows = d[d.issue_time == t]
+    if rows.empty and issue is None and len(live):
+        rows = live[live.issue_time == live.issue_time.max()]
+    if rows.empty:
+        raise HTTPException(404, f"no daily extremes for issue {st.fmt_issue(t)}")
+    models = list(MODELS)
+    day_rows = rows[rows.lead_day == lead_day]
+    stations = []
+    for lid, g in day_rows.groupby("location_id"):
+        loc = LOC_BY_ID[lid]
+        tm, rn = g[g.variable == "tmax"], g[g.variable == "rain24"]
+        item: dict[str, Any] = {"location_id": lid, "name": loc.name, "region": loc.region, "terrain": loc.terrain}
+        if len(tm):
+            r = tm.iloc[0]
+            item["tmax"] = {"blend": _f(r.blend, 1), "p10": _f(r.p10, 1), "p90": _f(r.p90, 1), "normal": _f(r.normal, 1),
+                            "departure": _f(r.blend - r.normal, 1) if pd.notna(r.normal) else None,
+                            "heat_wave_class": None if pd.isna(r.cls_blend) else int(r.cls_blend),
+                            "p_heat_wave": _f(r.p_event), "p_severe": _f(r.p_severe),
+                            "models": {m: _f(r[f"f_{m}"], 1) for m in models}, "equal": _f(r.equal, 1)}
+        if len(rn):
+            r = rn.iloc[0]
+            item["rain24"] = {"blend": _f(r.blend, 1), "p10": _f(r.p10, 1), "p90": _f(r.p90, 1), "imd_class": r.rain_class,
+                              "p_heavy": _f(r.p_event), "p_very_heavy": _f(r.p_severe),
+                              "models": {m: _f(r[f"f_{m}"], 1) for m in models}}
+        stations.append(item)
+    stations.sort(key=lambda x: -(x.get("tmax", {}).get("p_heat_wave") or 0))
+    valid = day_rows.valid_day.min() if len(day_rows) else None
+    return {"issue_time": st.fmt_issue(t), "lead_day": lead_day, "valid_day": None if valid is None else f"{valid:%Y-%m-%d}",
+            "available_lead_days": sorted(int(x) for x in rows.lead_day.unique()), "status": EXTREME_NOTE,
+            "stations": stations, "regional_outlook": regional_outlook(rows),
+            "definitions": imd_criteria.definitions(), "provenance": meta()["provenance"]}
+
+
+@app.get("/api/v1/extremes/verification")
+def extremes_verification():
+    """Held-out verification of the daily products with date-block bootstrap CIs. Event results say
+    insufficient_events when there are too few observed events for any claim."""
+    st = S()
+    if st.daily_verification is None:
+        raise _no_extremes()
+    return {"verification": jsonable(st.daily_verification), "status": EXTREME_NOTE, "definitions": imd_criteria.definitions(),
+            "provenance": meta()["provenance"]}
 
 
 @app.get("/api/v1/events")

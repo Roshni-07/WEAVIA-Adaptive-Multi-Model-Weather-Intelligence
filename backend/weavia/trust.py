@@ -16,7 +16,6 @@ import lightgbm as lgb
 
 from .config import BLEND_VARS, MODELS, REGIMES, SPREAD_FLOOR
 
-M = len(MODELS)
 BASE_FEATS = ["model_idx", "f", "ens", "dev", "abs_dev", "spread", "rel_spread", "ens_temp", "ens_rh",
               "ens_pressure", "ens_wind", "ens_rain", "dT", "dP", "lat", "lon", "m_sin", "m_cos", "lead_h",
               "region_code", "regime_code", "regime_conf", "hist", "rec", "histb", "recb"] + [f"p_{r}" for r in REGIMES]
@@ -26,7 +25,7 @@ def make_long(cx: pd.DataFrame, var: str, proba: np.ndarray, with_target: bool =
     N = len(cx)
     F = np.stack([cx[f"f_{var}_{m}"].values for m in MODELS], 1)
     ens, spread = F.mean(1), F.std(1)
-    others = (F.sum(1, keepdims=True) - F) / (M - 1)
+    others = (F.sum(1, keepdims=True) - F) / (len(MODELS) - 1)
     rcode = proba.argmax(1)
     rconf = proba.max(1)
     blocks = []
@@ -102,13 +101,13 @@ class TrustEngine:
 
     def predict_err(self, var: str, long_df: pd.DataFrame, n_cases: int) -> np.ndarray:
         X = self._X(long_df)
-        X["model_idx"] = pd.Categorical(X["model_idx"], categories=[0, 1, 2, 3])
+        X["model_idx"] = pd.Categorical(X["model_idx"], categories=list(range(len(MODELS))))
         p = self.models[var].predict(X)
-        return p.reshape(M, n_cases).T
+        return p.reshape(len(MODELS), n_cases).T
 
     def contribs(self, var: str, long_rows: pd.DataFrame) -> pd.DataFrame:
         X = self._X(long_rows)
-        X["model_idx"] = pd.Categorical(X["model_idx"], categories=[0, 1, 2, 3])
+        X["model_idx"] = pd.Categorical(X["model_idx"], categories=list(range(len(MODELS))))
         c = self.models[var].predict(X, pred_contrib=True)
         return pd.DataFrame(c, columns=BASE_FEATS + ["bias"], index=long_rows.index)
 

@@ -2,7 +2,7 @@
 
 **Smart India Hackathon 2026 · SIH26081 · Ministry of Earth Sciences (MoES)**
 
-Status: **plan, not built.** Today the pipeline runs on a synthetic world. This document says how it moves to real, multi-model data and how it runs on a schedule. Items marked *verify* depend on provider terms and coverage that must be checked before building.
+Status: **built and tested offline, not yet run against the real service.** Phases 1 to 3 below exist in code (`providers/openmeteo.py`, `live.py`, `infer.py`) and pass tests on a fake of the documented Open-Meteo API backed by the synthetic world. The development sandbox has no outbound internet, so the first real run is yours: `python -m weavia.live check`. Items marked *verify* depend on provider terms and coverage that must be confirmed.
 
 ## 1. Two jobs, two data paths
 
@@ -76,12 +76,35 @@ Rules:
 
 ## 6. Phases and acceptance
 
-| Phase | Deliverable | Done when |
+| Phase | Deliverable | Status |
 |---|---|---|
-| 0 | Check per-model history, model list for India, provider terms, truth-source access | A written table of what exists for the 20 stations |
-| 1 | `providers/openmeteo.py` (Previous Runs, leads 24/48/72) and one truth provider | Provider passes `validate`, pipeline runs end to end on real data |
-| 2 | Real back-test with the existing verification protocol | CIs reported by lead and season, truth source named, no synthetic mixing |
-| 3 | Live cycle (Forecast API), scheduler, freshness and missing-model handling | Unattended runs for a week, flags correct on injected failures |
-| 4 | Single Runs for 6 h and 12 h, optional IMD/NCMRWF source | Added through the same interface |
+| 0 | Check per-model history, model ids, endpoint parameters, provider terms, truth access | **Yours to run.** `python -m weavia.live check` probes every model on both endpoints plus the archive and prints OK or the exact failure |
+| 1 | Provider (Previous Runs, leads 24/48/72) and archive truth provider | Built. 11 provider tests, including retries, 429, 400, partial windows, wrong location counts |
+| 2 | Real back-test through the existing verification protocol | Code path built (`weavia.live fit`). **Not run on real data.** Results will be "vs reanalysis" |
+| 3 | Live 6-hourly cycle, scheduler loop, freshness, missing-model handling | Built. 10 end-to-end tests: scoring equals the pipeline exactly, no hindsight, idempotent, missing model, total outage, API reload, stale flag |
+| 4 | Single Runs for 6 h and 12 h, IMD/NCMRWF source, independent truth | Not started |
 
-Until Phase 2 passes, no accuracy claim about real weather is made.
+### What the offline tests prove
+
+- A live case is scored by the same fitted models as a stored case: scoring stored validation and test cases through the live code reproduces `blend.parquet` to 1e-6.
+- History used for training ends at the issue. A live case carries no outcome.
+- A model that fails is dropped with weights renormalised and a visible flag. A total outage keeps the last good artifacts and reports `failed`, and nothing is half-written.
+- The API picks up a new cycle without a restart and flags data older than 9 hours as stale.
+
+### What they cannot prove
+
+- That the model ids (`ecmwf_ifs025`, `ecmwf_aifs025_single`, `gfs_global`, `icon_global`) and the Previous Runs `start_date`/`end_date` parameters behave as assumed. The fake follows the documentation, not the live service.
+- Any real forecast skill.
+
+### Daily IMD-aligned products
+
+`fit` also builds daily products from the same hourly responses: IST-day maximum temperature, IMD-day (08:30 to 08:30 IST) rainfall, per-station normals (1991 to 2020 reanalysis, within 7 days of each date), calibrated bands, and verification with date-block bootstrap CIs. `cycle` adds them for each live issue. A failure here never breaks the main fit or cycle: it is reported as `skipped` in the status. Their weights are the trust weights of the nearest 6-hourly case, so they inherit WEAVIA's context-aware weighting. The first real `fit` must also confirm that the archive accepts daily aggregates, which the offline fake cannot prove.
+
+### Known design limits
+
+- Truth is reanalysis, so verification is not independent. Replace it with station or satellite truth before claiming skill.
+- Live rows use error memory from the last fit. `loop` refits daily, so memory can be a day plus the truth lag old. It is never newer than the forecast.
+- Live issue time is the fetch cycle, not the model's own run time.
+- Three or more models are supported (the trust engine no longer assumes four). More sources only help if they have history to train on.
+
+Until Phase 2 passes on real data, no accuracy claim about real weather is made.

@@ -18,8 +18,22 @@ class Store:
     def __init__(self, data_dir: str | Path = "data"):
         d = Path(data_dir)
         self.dir = d
+        self._sig = self.signature()            # what we are about to load; compared by the API to detect new cycles
         self.meta = json.loads((d / "meta.json").read_text())
+        if self.meta.get("model_ids"):           # real-data runs use real model ids and leads: align process-wide config
+            from . import config
+            config.MODELS[:] = self.meta["model_ids"]
+            config.LEADS[:] = self.meta["leads"]
+        self.live = json.loads((d / "live_status.json").read_text()) if (d / "live_status.json").exists() else None
         self.verification = json.loads((d / "verification.json").read_text())
+        dx = d / "daily_extremes.parquet"       # present only after a real-data fit
+        self.daily = None
+        if dx.exists():
+            self.daily = pd.read_parquet(dx)
+            self.daily["issue_time"] = pd.to_datetime(self.daily["issue_time"], utc=True)
+            self.daily["valid_day"] = pd.to_datetime(self.daily["valid_day"])
+        dv = d / "daily_verification.json"
+        self.daily_verification = json.loads(dv.read_text()) if dv.exists() else None
         blend = pd.read_parquet(d / "blend.parquet")
         blend["issue_time"] = pd.to_datetime(blend["issue_time"], utc=True)
         blend["valid_time"] = pd.to_datetime(blend["valid_time"], utc=True)
@@ -36,7 +50,7 @@ class Store:
         self.events = ev
         self.models = joblib.load(d / "models.joblib")
         self._truth = None
-        self._issues = sorted(self.cases[self.cases.split == "test"].index.get_level_values("issue_time").unique())
+        self._issues = sorted(self.cases[self.cases.split.isin(["test", "live"])].index.get_level_values("issue_time").unique())
         self._spread_q = None
 
     # ---------------------------------------------------------------- lookups
@@ -48,12 +62,25 @@ class Store:
     def latest_issue(self) -> pd.Timestamp:
         return self._issues[-1]
 
+    def fmt_issue(self, t: pd.Timestamp) -> str:
+        """Daily synthetic issues print as dates. Real-data issues are 6-hourly, so they carry the hour."""
+        return f"{t:%Y-%m-%dT%H:%MZ}" if self.meta.get("data_mode") == "real" else f"{t:%Y-%m-%d}"
+
     def parse_issue(self, s: str | None) -> pd.Timestamp:
         if not s:
             return self.latest_issue
         t = pd.Timestamp(s)
         t = t.tz_localize("UTC") if t.tzinfo is None else t.tz_convert("UTC")
-        return t.normalize()
+        if "T" in s or " " in s.strip():          # explicit time: exact
+            return t
+        day = t.normalize()                         # date only: that day's issue (the last one if several)
+        same = [i for i in self._issues if i.normalize() == day]
+        return same[-1] if same else day
+
+    def signature(self) -> tuple:
+        """Changes whenever a live cycle rewrites artifacts, so a long-running API can reload."""
+        return tuple((self.dir / f).stat().st_mtime_ns if (self.dir / f).exists() else 0
+                     for f in ("blend.parquet", "cases.parquet", "live_status.json", "meta.json", "daily_extremes.parquet", "daily_verification.json"))
 
     def nearest_location(self, lat: float, lon: float):
         best = min(LOCATIONS, key=lambda l: (l.lat - lat) ** 2 + ((l.lon - lon) * np.cos(np.radians(lat))) ** 2)

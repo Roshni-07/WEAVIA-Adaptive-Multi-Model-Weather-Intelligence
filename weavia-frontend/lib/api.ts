@@ -3,8 +3,13 @@ export const VARS: Var[] = ["rain", "temp", "wind"];
 export const VAR_NAME: Record<Var, string> = { rain: "Rainfall", temp: "Temperature", wind: "Wind" };
 export const VAR_UNIT: Record<Var, string> = { rain: "mm/6h", temp: "°C", wind: "km/h" };
 
+export interface LiveStatus {
+  state: "ok" | "degraded" | "failed"; issue_time: string; fetched_at: string; age_minutes: number | null; stale: boolean;
+  models_ok: string[]; models_missing: Record<string, string>; reason?: string; n_incomplete_dropped?: number;
+}
+
 export interface Meta {
-  provenance: { data_mode: string; data_notice: string; model_version: string; generated_at: string };
+  provenance: { data_mode: string; data_notice: string; model_version: string; generated_at: string; truth_source?: string | null; live?: LiveStatus | null };
   issues: string[]; latest_issue: string; leads: number[];
   variables: Record<string, { label: string; unit: string; event_threshold: number }>;
   models: { model_id: string; name: string; kind: string; label: string }[];
@@ -41,6 +46,8 @@ export const api = {
   regime: (location_id: string, issue: string, lead: number) => req<any>("/regime" + q({ location_id, issue, lead })),
   skillAtlas: (variable: Var, lead: number) => req<any>("/skill-atlas" + q({ variable, lead })),
   verification: () => req<any>("/verification"),
+  extremes: (issue: string, lead_day: number) => req<any>("/extremes" + q({ issue: issue || undefined, lead_day })),
+  extremesVerification: () => req<any>("/extremes/verification"),
   events: (variable?: string, limit = 60) => req<any[]>("/events" + q({ variable, limit })),
   autopsy: (id: string, lead: number) => req<any>(`/autopsy/${id}` + q({ lead })),
   lab: (body: any) => req<any>("/lab/simulate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),

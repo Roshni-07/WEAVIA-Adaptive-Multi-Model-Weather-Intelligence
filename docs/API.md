@@ -18,11 +18,11 @@ uvicorn weavia.api.main:app --port 8000
 
 | Item | Rule |
 |---|---|
-| `issue` | `YYYY-MM-DD`. Optional. Defaults to the latest issue. Only dates in the served (test-slice) range are valid |
-| `lead` | Hours. One of `6, 12, 24, 48, 72`. Default `24` |
+| `issue` | Optional, defaults to the latest. Synthetic data: `YYYY-MM-DD`. Real data (6-hourly): `YYYY-MM-DDTHH:MMZ`. A bare date selects that day's last issue |
+| `lead` | Hours. Synthetic: `6, 12, 24, 48, 72`. Real data: `24, 48, 72`. `GET /meta` lists the valid ones. Default `24` |
 | `variable` | One of `rain`, `temp`, `wind`. Default `rain` |
 | `location_id` | Station id, for example `blr`. Full list in `GET /meta` |
-| Models | `model_a`, `model_b`, `model_c`, `model_d` |
+| Models | Synthetic: `model_a` to `model_d`. Real data: `ifs`, `aifs`, `gfs`, `icon`. `GET /meta` lists them |
 | Units | rain `mm/6h`, temp `degC`, wind `km/h` |
 
 ### Errors
@@ -38,7 +38,7 @@ uvicorn weavia.api.main:app --port 8000
 
 | Method | Route | Purpose |
 |---|---|---|
-| GET | `/health` | Service and artifact status |
+| GET | `/health` | Service status. `ok` or `stale`. In live mode includes the `live` block (state, cycle time, age, missing models) |
 | GET | `/meta` | Provenance, issue dates, leads, variables, models, regimes, locations |
 | GET | `/map` | All-location snapshot that drives every globe layer |
 | GET | `/overview` | National headline: ranked alerts and weight flow |
@@ -50,6 +50,8 @@ uvicorn weavia.api.main:app --port 8000
 | GET | `/skill-atlas` | Verified MAE per model × regime and per region |
 | GET | `/verification` | Test-slice results with confidence intervals |
 | GET | `/events` | Extreme-event and large-miss list |
+| GET | `/extremes` | IMD-aligned daily guidance: heat-wave indicator per station, 24 h rain class and heavy-rain probability, regional outlook. Real-data mode only |
+| GET | `/extremes/verification` | Held-out verification of the daily products with date-block bootstrap CIs. Real-data mode only |
 | GET | `/autopsy/{event_id}` | Forecast failure analysis for one event |
 | POST | `/lab/simulate` | Counterfactual weights, with back-test |
 
@@ -60,14 +62,24 @@ uvicorn weavia.api.main:app --port 8000
 No parameters.
 
 ```json
-{ "status": "ok", "model_version": "weavia-meta-lgbm-0.1", "data_mode": "synthetic" }
+{ "status": "ok", "model_version": "weavia-meta-lgbm-0.1", "data_mode": "synthetic", "live": null }
 ```
+
+`status` is `ok`, `stale` (live data older than 9 hours, or the last cycle failed) or `no_artifacts`. In real-data mode `live` carries:
+
+| Field | Meaning |
+|---|---|
+| `state` | `ok`, `degraded` (a model missing or cases dropped) or `failed` |
+| `issue_time`, `fetched_at` | The 6-hour cycle and when it was fetched |
+| `age_minutes`, `stale` | Computed at request time |
+| `models_ok`, `models_missing` | Models that responded, and the reason for each that did not |
+| `truth_source`, `history_end` | What verification compares against, and where training history ends |
 
 ### `GET /meta`
 
 No parameters. Returns:
 
-- `provenance`: `data_mode`, `data_notice`, `model_version`, `generated_at`
+- `provenance`: `data_mode`, `data_notice`, `model_version`, `generated_at`, `truth_source`, and `live` (real-data mode, same fields as `/health`)
 - `issues`, `latest_issue`
 - `leads`
 - `variables`: label, unit, `event_threshold` for each
@@ -128,6 +140,25 @@ Params: `variable`, `lead`. Returns `cells` (regime × model: `mae`, `bias`, `n`
 
 No parameters. Returns `provenance`, `verification` (all results and CIs), `splits`. See [VERIFICATION.md](VERIFICATION.md).
 
+### `GET /extremes`
+
+Params: `issue` (default: latest live issue), `lead_day` (1 to 3, default 1). Real-data mode only, since daily products come from hourly data. Synthetic data returns 404 with an explanation.
+
+Returns `issue_time`, `lead_day`, `valid_day`, `available_lead_days`, `status`, `stations`, `regional_outlook`, `definitions`, `provenance`.
+
+Each station has `terrain` (plains, coastal, hilly) and:
+
+| Field | Meaning |
+|---|---|
+| `tmax` | `blend`, `p10`, `p90`, `normal`, `departure`, `heat_wave_class` (0 none, 1 heat wave, 2 severe), `p_heat_wave`, `p_severe`, per-model `models` and `equal` |
+| `rain24` | `blend`, `p10`, `p90`, `imd_class`, `p_heavy` (64.5 mm or more), `p_very_heavy` (115.6 mm or more), per-model `models` |
+
+Stations are sorted by `p_heat_wave`. `regional_outlook` applies IMD's persistence rule (2 or more stations on 2 consecutive days) per WEAVIA region across the issue's lead days. **It is an indicator, not an IMD declaration.** Normals are reanalysis-based and regions are not IMD sub-divisions.
+
+### `GET /extremes/verification`
+
+No parameters. Per lead day: MAE of the daily maximum and 24 h rain against the equal ensemble, the best single model and each model, with date-block bootstrap CIs. Event skill (heat wave, heavy rain) reports precision, recall, F1, the F1 gain over the equal ensemble with its CI, and `insufficient_events`. When there are fewer than 30 observed station-days or 5 event days, no claim is made.
+
 ### `GET /events`
 
 | Param | Default |
@@ -179,7 +210,7 @@ curl -X POST "http://localhost:8000/api/v1/lab/simulate" \
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `WEAVIA_DATA` | `data` | Artifact directory the API reads |
+| `WEAVIA_DATA` | `data` | Artifact directory the API reads. Use `data_live` for real-data mode. The API reloads when a cycle publishes |
 | `WEAVIA_CORS` | `*` | Comma-separated allowed origins. Restrict before any public deployment |
 | `WEAVIA_RATE_LIMIT` | `120` | Requests per minute per client, all routes except `/health`. `0` disables |
 | `WEAVIA_LAB_RATE_LIMIT` | `20` | Requests per minute per client for `POST /lab/simulate`. `0` disables |

@@ -18,6 +18,17 @@ class Location:
     wind_scale: float
     coastal: bool = False
 
+    @property
+    def terrain(self) -> str:
+        """IMD heat-wave station class: 'coastal', 'hilly' or 'plains'. PROPOSED from coordinates and the coastal
+        flag: confirm against IMD's own station classification before relying on it."""
+        if self.coastal:
+            return "coastal"
+        return "hilly" if self.id in HILLY_STATIONS else "plains"
+
+
+HILLY_STATIONS = {"sxr"}      # Srinagar (about 1,600 m). Bengaluru and Pune sit on plateaus and are kept as plains
+
 
 LOCATIONS: list[Location] = [
     Location("blr", "Bengaluru", 12.97, 77.59, "SOUTH", 24.5, 2.8, 0.6, 215, 60, 3.5, 9),

@@ -107,6 +107,15 @@ The earlier rain interval had a width of about 0.01 mm, because one normalised-r
 
 Other automated checks: unit conversion round trips, validation of bad frames, bootstrap detects a real 20% improvement and does not invent one from noise, rain intervals are non-degenerate and cover about 80% on held-out synthetic data, and the rate limiter. 40 tests in total.
 
+## 7b. Real-data mode
+
+`python -m weavia.live fit` runs the same protocol on real forecasts. Two differences, both stated in every real-mode artifact:
+
+1. **Truth is the Open-Meteo archive**, which is reanalysis-based and not independent of the models. Real-mode results are "vs reanalysis".
+2. **Leads are 24, 48 and 72 h**, because Previous Runs provides day offsets.
+
+No real-mode result has been produced yet. Live (unmatured) cases are excluded from verification, training and calibration.
+
 ## 8. What would count as real evidence
 
 1. A provider for real forecast and observation history behind the existing interface. Plan and data limits: [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md).

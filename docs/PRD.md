@@ -65,9 +65,10 @@ Forecasters and disaster managers need one forecast they can trust, with a clear
 | F8 | Explain each forecast from real weights and errors | Done |
 | F9 | Autopsy of forecast failures | Done |
 | F10 | Counterfactual Lab (live back-test of alternative weights) | Done |
-| F11 | REST API (14 routes under `/api/v1`) | Done |
+| F11 | REST API (16 routes under `/api/v1`) | Done |
 | F12 | Dashboard: globe, forecast, trust, regime, models, autopsy, lab | Done |
-| F13 | Real data provider (Open-Meteo) | Planned. See [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md) |
+| F13 | Real data provider (Open-Meteo) | Built, tested offline. Not yet run on the real service |
+| F16 | Real-time 6-hourly cycle with freshness, degraded and stale states | Built, tested end to end offline |
 | F14 | Wind direction and wind particles | Planned |
 | F15 | PostgreSQL/PostGIS, Redis, docker-compose | Planned |
 

@@ -5,7 +5,9 @@ __pycache__/
 .venv/
 venv/
 data/
+data_live/
 .env
 .env.local
 .pytest_cache/
 *.log
+*.tsbuildinfo

@@ -18,19 +18,8 @@ def assign_split(cx: pd.DataFrame) -> pd.DataFrame:
     return cx
 
 
-def build_cases(fc_long: pd.DataFrame, obs_long: pd.DataFrame, regime_obs: pd.DataFrame) -> pd.DataFrame:
-    piv = fc_long.pivot_table(index=["issue_time", "location_id", "lead_h", "valid_time"],
-                              columns=["variable", "model_id"], values="value", aggfunc="first")
-    piv.columns = [f"f_{v}_{m}" for v, m in piv.columns]
-    cx = piv.reset_index()
-
-    obs = obs_long.pivot_table(index=["timestamp", "location_id"], columns="variable", values="value", aggfunc="first").reset_index()
-    o_valid = obs.rename(columns={"timestamp": "valid_time", **{v: f"obs_{v}" for v in ALL_VARS}})
-    cx = cx.merge(o_valid, on=["valid_time", "location_id"], how="left")
-    o_issue = obs.rename(columns={"timestamp": "issue_time", "temp": "obsi_temp", "pressure": "obsi_pressure"})
-    cx = cx.merge(o_issue[["issue_time", "location_id", "obsi_temp", "obsi_pressure"]], on=["issue_time", "location_id"], how="left")
-    cx = cx.merge(regime_obs, on=["valid_time", "location_id"], how="left")
-
+def _derive_features(cx: pd.DataFrame) -> pd.DataFrame:
+    """Forecast-time features. Needs only forecasts (plus issue-time observations when they exist)."""
     for v in ALL_VARS:
         cols = [f"f_{v}_{m}" for m in MODELS]
         cx[f"ens_{v}"] = cx[cols].mean(axis=1)
@@ -45,6 +34,41 @@ def build_cases(fc_long: pd.DataFrame, obs_long: pd.DataFrame, regime_obs: pd.Da
     cx["m_cos"] = np.cos(2 * np.pi * cx["month"] / 12)
     cx["dT"] = cx["ens_temp"] - cx["obsi_temp"]
     cx["dP"] = cx["ens_pressure"] - cx["obsi_pressure"]
+    return cx
+
+
+def build_serving_cases(fc_long: pd.DataFrame) -> pd.DataFrame:
+    """Cases for a live issue: forecasts only, no outcome yet. split='live'. Same features as training cases."""
+    piv = fc_long.pivot_table(index=["issue_time", "location_id", "lead_h", "valid_time"],
+                              columns=["variable", "model_id"], values="value", aggfunc="first")
+    piv.columns = [f"f_{v}_{m}" for v, m in piv.columns]
+    cx = piv.reset_index()
+    for c in [f"obs_{v}" for v in ALL_VARS] + ["obsi_temp", "obsi_pressure"]:
+        cx[c] = np.nan
+    cx["obs_regime"] = None
+    cx = _derive_features(cx)
+    cx["split"] = "live"
+    return cx.sort_values(["location_id", "lead_h", "issue_time"]).reset_index(drop=True)
+
+
+def build_cases(fc_long: pd.DataFrame, obs_long: pd.DataFrame, regime_obs: pd.DataFrame, use_issue_obs: bool = True) -> pd.DataFrame:
+    piv = fc_long.pivot_table(index=["issue_time", "location_id", "lead_h", "valid_time"],
+                              columns=["variable", "model_id"], values="value", aggfunc="first")
+    piv.columns = [f"f_{v}_{m}" for v, m in piv.columns]
+    cx = piv.reset_index()
+
+    obs = obs_long.pivot_table(index=["timestamp", "location_id"], columns="variable", values="value", aggfunc="first").reset_index()
+    o_valid = obs.rename(columns={"timestamp": "valid_time", **{v: f"obs_{v}" for v in ALL_VARS}})
+    cx = cx.merge(o_valid, on=["valid_time", "location_id"], how="left")
+    o_issue = obs.rename(columns={"timestamp": "issue_time", "temp": "obsi_temp", "pressure": "obsi_pressure"})
+    cx = cx.merge(o_issue[["issue_time", "location_id", "obsi_temp", "obsi_pressure"]], on=["issue_time", "location_id"], how="left")
+    cx = cx.merge(regime_obs, on=["valid_time", "location_id"], how="left")
+
+    if not use_issue_obs:       # real-time truth lags days; features must not need an observation at issue time
+        cx["obsi_temp"], cx["obsi_pressure"] = np.nan, np.nan
+    cx = _derive_features(cx)
+    fcols = [f"f_{v}_{m}" for v in ALL_VARS for m in MODELS]
+    cx = cx.dropna(subset=fcols).copy()          # a case needs every model's forecast; real feeds have gaps
     cx = cx.dropna(subset=[f"obs_{v}" for v in BLEND_VARS]).copy()
     cx = cx.sort_values(["location_id", "lead_h", "issue_time"]).reset_index(drop=True)
     cx = assign_split(cx)

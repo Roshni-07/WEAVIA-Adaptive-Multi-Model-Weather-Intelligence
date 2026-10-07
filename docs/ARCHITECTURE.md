@@ -106,6 +106,18 @@ Residual distributions are stored per **lead × forecast-amount bin** (dry, trac
 
 LightGBM classifier per variable, isotonic calibration, F1-optimal alert threshold. Isotonic calibration and the threshold are fit on **time-blocked out-of-fold predictions** over train + validation: issue dates are cut into five contiguous blocks and each block is predicted by a model fit on the other four. The final classifier is fit on all pooled rows. A variable with fewer than 30 calibration events is not fitted, and the UI says "too few events" instead.
 
+## 4b. Live path
+
+```text
+python -m weavia.live fit     Previous Runs (24/48/72 h) + archive truth -> run_from_sources -> artifacts + cases_full
+python -m weavia.live cycle   latest run per model -> impute missing -> features -> error memory over history + live
+                              -> score_cases (same fitted models) -> publish blend/cases/regime_proba atomically
+                              -> live_status.json (state, models, age)
+python -m weavia.live loop    cycle every 6 h (45 min after the run lands), refit daily
+```
+
+`run_from_sources` is the single entry point after data acquisition, used by both the synthetic run and `fit`. `infer.score_cases` mirrors its inference half, and a test proves it reproduces `blend.parquet`. Live cases have `split="live"`, no outcome, and never enter training, calibration or verification. The API reloads when artifacts change. Real mode sets `config.MODELS` and `config.LEADS` from `meta.json`. See [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md).
+
 ## 5. Provider contract
 
 ```text
@@ -143,13 +155,19 @@ Adding a real source (for example Open-Meteo) means writing one subclass. Harmon
 
 ```text
 backend/weavia/
-├── api/main.py          FastAPI app, 14 routes, reads Store only
+├── live.py              Real-data fit / cycle / loop / check (python -m weavia.live)
+├── infer.py             Scores cases with fitted models (live path, equivalent to the pipeline)
+├── extremes.py          Daily IMD-aligned products: blend, calibrate, heat-wave indicator, verify
+├── imd_criteria.py      IMD heat-wave, 24 h rainfall and wind definitions as tested pure functions
+├── api/main.py          FastAPI app, 16 routes, reads Store only
 ├── api/ratelimit.py     Per-client rate limit and security headers (middleware)
+├── live.py              Real-time fit, 6-hourly cycle, loop, CLI (check, fit, cycle, loop)
+├── infer.py             Score cases with fitted models (live inference)
 ├── store.py             Typed access to artifacts
 ├── pipeline.py          End-to-end run, artifact writer
 ├── config.py            Constants, units, thresholds
 ├── locations.py         20 India stations
-├── providers/           ForecastProvider, ObservationProvider, synthetic implementations
+├── providers/           ForecastProvider, ObservationProvider, synthetic and Open-Meteo implementations
 ├── synthetic/           World generator and model error specs
 ├── harmonize.py         Canonical schema and validation
 ├── features.py          Cases, splits, error memory
@@ -179,4 +197,4 @@ weavia-frontend/
 
 ## 9. Not built yet
 
-PostgreSQL/PostGIS, Redis, Celery, docker-compose, MapLibre, D3, Framer Motion, real data providers, wind direction. Real-data and live-cycle design: [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md). Roadmap: [README](../README.md).
+PostgreSQL/PostGIS, Redis, Celery, docker-compose, MapLibre, D3, Framer Motion, wind direction, independent truth, a production scheduler (the built-in `loop` is a simple one). Real-data and live-cycle design: [REAL_DATA_PLAN.md](REAL_DATA_PLAN.md). Roadmap: [README](../README.md).

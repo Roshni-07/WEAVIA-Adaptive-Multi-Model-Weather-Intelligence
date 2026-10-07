@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { api, Meta, MapOut, Var } from "./api";
 
-export type View = "command" | "why" | "regime" | "models" | "autopsy" | "lab";
+export type View = "command" | "why" | "regime" | "extremes" | "models" | "autopsy" | "lab";
 export type Layer = "rain" | "temp" | "wind" | "risk" | "weights";
 
 interface S {
@@ -28,7 +28,7 @@ export const useW = create<S>((set, get) => ({
       const variable = pick<Var>(q.get("var"), ["rain", "temp", "wind"], "rain");
       set({ meta, issue, variable, layer: variable, lead: pick(q.get("lead"), meta.leads, 24),
             locationId: meta.locations.some((l) => l.id === q.get("loc")) ? q.get("loc")! : "maa",
-            view: pick<View>(q.get("view"), ["command", "why", "regime", "models", "autopsy", "lab"], "command") });
+            view: pick<View>(q.get("view"), ["command", "why", "regime", "extremes", "models", "autopsy", "lab"], "command") });
       await get().refresh();
     } catch (e: any) { set({ error: e.message, loading: false }); }
   },

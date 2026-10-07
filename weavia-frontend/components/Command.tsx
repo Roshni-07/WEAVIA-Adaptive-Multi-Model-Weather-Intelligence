@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useW, Layer } from "@/lib/store";
 import { api, VAR_NAME, VAR_UNIT } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import { MODEL_COLOR, VAR_COLOR, n, pct, nice, day, dt } from "@/lib/format";
+import { MODEL_COLOR, VAR_COLOR, n, pct, nice, day, dt, issueLabel } from "@/lib/format";
 import { Panel, VarTabs, Weights, Where } from "./ui";
 import { SCALE, rampCss } from "./Globe";
 
@@ -108,9 +108,9 @@ function Timeline() {
       <label>Lead time
         <input type="range" min={0} max={L.length - 1} step={1} value={L.indexOf(lead)} onChange={(e) => setLead(L[+e.target.value])} aria-valuetext={`+${lead} hours`} />
         <span className="mono ticks">{L.map((l) => <i key={l} className={l === lead ? "on" : ""}>+{l}h</i>)}</span></label>
-      <label>Issue date <span className="mono">{day(issue)}</span>
-        <input type="range" min={0} max={meta!.issues.length - 1} value={idx} onChange={(e) => setIssue(meta!.issues[+e.target.value])} aria-valuetext={day(issue)} />
-        <span className="mono ticks"><i>{day(meta!.issues[0])}</i><i>test slice only</i><i>{day(meta!.issues[meta!.issues.length - 1])}</i></span></label>
+      <label>Issue date <span className="mono">{issueLabel(issue)}</span>
+        <input type="range" min={0} max={meta!.issues.length - 1} value={idx} onChange={(e) => setIssue(meta!.issues[+e.target.value])} aria-valuetext={issueLabel(issue)} />
+        <span className="mono ticks"><i>{issueLabel(meta!.issues[0])}</i><i>{meta!.provenance.data_mode === "real" ? "history + live" : "test slice only"}</i><i>{issueLabel(meta!.issues[meta!.issues.length - 1])}</i></span></label>
     </div>
   );
 }

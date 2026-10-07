@@ -35,8 +35,8 @@ export default function Models() {
                 <td className="mono">{n(h.vs_equal.improvement_pct)}% [{n(h.vs_equal.ci95_pct[0])}, {n(h.vs_equal.ci95_pct[1])}]<small>{h.vs_equal.significant ? "CI excludes 0" : "CI includes 0: no claim"}</small></td>
                 <td className="mono">{h.best_single_model?.slice(-1).toUpperCase()} {n(h.best_single_mae, 3)}</td>
                 <td className="mono">{b ? <>{n(b.improvement_pct)}% [{n(b.ci95_pct?.[0])}, {n(b.ci95_pct?.[1])}]<small>{b.significant ? "CI excludes 0" : "CI includes 0: no claim"}</small></> : "—"}</td></tr>); })}</tbody></table></div>)}
-          {V && (<><h4>Interval coverage (P10–P90, nominal 80%)</h4><div className="scroll"><table className="heat"><thead><tr><th>Var</th>{[6, 12, 24, 48, 72].map((l) => <th key={l}>+{l}h</th>)}</tr></thead><tbody>
-            {VARS.map((v) => (<tr key={v}><th>{VAR_NAME[v]}</th>{[6, 12, 24, 48, 72].map((l) => { const c = V.coverage.find((x: any) => x.variable === v && x.lead_h === l); return <td key={l} className="mono">{c ? pct(c.inside_p10_p90) : "—"}</td>; })}</tr>))}</tbody></table></div></>)}
+          {V && (<><h4>Interval coverage (P10–P90, nominal 80%)</h4><div className="scroll"><table className="heat"><thead><tr><th>Var</th>{meta!.leads.map((l) => <th key={l}>+{l}h</th>)}</tr></thead><tbody>
+            {VARS.map((v) => (<tr key={v}><th>{VAR_NAME[v]}</th>{meta!.leads.map((l) => { const c = V.coverage.find((x: any) => x.variable === v && x.lead_h === l); return <td key={l} className="mono">{c ? pct(c.inside_p10_p90) : "—"}</td>; })}</tr>))}</tbody></table></div></>)}
           {V && (<><h4>Event detection (test slice)</h4>{V.events.map((e: any) => (<p key={e.variable} className="defn mono">{VAR_NAME[e.variable as "rain"]} ≥ {e.threshold}: {e.n_obs_events} observed events{e.n_obs_events < 30 ? " (too few for a skill claim)" : ""}{e.n_obs_events >= 30 && e.methods?.weavia_event_model ? ` · WEAVIA event-model F1 ${n(e.methods.weavia_event_model.f1, 2)}` : ""}</p>))}</>)}
         </Panel>
       </div>

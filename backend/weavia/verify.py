@@ -13,9 +13,13 @@ import pandas as pd
 
 from .config import BLEND_VARS, EVENT_THRESH, LEADS, MODELS, REGIMES, VAR_LABEL, tolerance
 
-SINGLE = {m: f"f_{m}" for m in MODELS}
-COLS = {**SINGLE, "equal": "blend_equal", "inverse_error": "blend_inv", "weavia": "blend"}
-METHODS = list(COLS)
+def _single() -> dict:
+    """Evaluated per call, never at import: real-data runs replace config.MODELS before evaluating."""
+    return {m: f"f_{m}" for m in MODELS}
+
+
+def _cols() -> dict:
+    return {**_single(), "equal": "blend_equal", "inverse_error": "blend_inv", "weavia": "blend"}
 
 
 def regime_metrics(cx_test: pd.DataFrame, proba: np.ndarray) -> dict:
@@ -40,7 +44,7 @@ def regime_metrics(cx_test: pd.DataFrame, proba: np.ndarray) -> dict:
 
 
 def _err_frame(d: pd.DataFrame) -> pd.DataFrame:
-    e = pd.DataFrame({m: (d[c] - d["obs"]) for m, c in COLS.items()})
+    e = pd.DataFrame({m: (d[c] - d["obs"]) for m, c in _cols().items()})
     return e
 
 
@@ -53,7 +57,7 @@ def _bootstrap(sums: np.ndarray, counts: np.ndarray, B: int = 2000, seed: int = 
 
 def _best_single(train: pd.DataFrame, var: str, lead: int | None) -> str:
     d = train[(train.variable == var)] if lead is None else train[(train.variable == var) & (train.lead_h == lead)]
-    return min(SINGLE, key=lambda m: float((d[SINGLE[m]] - d["obs"]).abs().mean()))
+    return min(_single(), key=lambda m: float((d[_single()[m]] - d["obs"]).abs().mean()))
 
 
 def evaluate(blend: pd.DataFrame, skill: pd.DataFrame, regime_m: dict, alert_thr: dict | None = None) -> dict:
@@ -70,7 +74,7 @@ def evaluate(blend: pd.DataFrame, skill: pd.DataFrame, regime_m: dict, alert_thr
         E = _err_frame(dv)
         AE = E.abs()
         AE["best_single_train"] = [AE.at[i, bt[L]] for i, L in zip(AE.index, dv.lead_h.values)]
-        oracle = {L: min(SINGLE, key=lambda m: float(AE.loc[dv.lead_h.values == L, m].mean())) for L in LEADS}
+        oracle = {L: min(_single(), key=lambda m: float(AE.loc[dv.lead_h.values == L, m].mean())) for L in LEADS}
         AE["best_single_oracle"] = [AE.at[i, oracle[L]] for i, L in zip(AE.index, dv.lead_h.values)]
         SE = E**2
         dates = pd.factorize(dv["issue_time"])[0]
@@ -99,7 +103,7 @@ def evaluate(blend: pd.DataFrame, skill: pd.DataFrame, regime_m: dict, alert_thr
         for L in [None] + LEADS:
             mask = np.ones(len(dv), bool) if L is None else (dv.lead_h.values == L)
             row = {"variable": var, "lead_h": "all" if L is None else L, "n": int(mask.sum()), "methods": {}}
-            for m in METHODS:
+            for m in list(_cols()):
                 row["methods"][m] = {"mae": float(AE.loc[mask, m].mean()), "rmse": float(np.sqrt(SE.loc[mask, m].mean())),
                                      "bias": float(E.loc[mask, m].mean())}
             row["methods"]["best_single_train"] = {"mae": float(AE.loc[mask, "best_single_train"].mean())}
@@ -110,7 +114,7 @@ def evaluate(blend: pd.DataFrame, skill: pd.DataFrame, regime_m: dict, alert_thr
         eq = row_all = next(r for r in result["pooled"] if r["variable"] == var)
         v = eq["vs"]
         w_ = eq["methods"]["weavia"]["mae"]
-        best_model = min(SINGLE, key=lambda m: eq["methods"][m]["mae"])
+        best_model = min(_single(), key=lambda m: eq["methods"][m]["mae"])
         result["headline"].append({
             "variable": var, "label": VAR_LABEL[var], "weavia_mae": w_,
             "equal_mae": v["equal"]["ref_mae"], "best_single_model": best_model,
@@ -126,7 +130,7 @@ def evaluate(blend: pd.DataFrame, skill: pd.DataFrame, regime_m: dict, alert_thr
         base_rate = float((train[train.variable == var]["obs"] >= thr).mean())
         ev = {"variable": var, "threshold": thr, "n_obs_events": int(obs_ev.sum()), "n": int(len(dv)),
               "base_rate_train": base_rate, "methods": {}}
-        for m, c in {**SINGLE, "equal": "blend_equal", "weavia_deterministic": "blend"}.items():
+        for m, c in {**_single(), "equal": "blend_equal", "weavia_deterministic": "blend"}.items():
             ev["methods"][m] = _prf(dv[c].values >= thr, obs_ev)
         at = float(alert_thr.get(var, 0.5))
         ev["alert_threshold_val"] = at

@@ -79,3 +79,5 @@ h1,h2,h3{text-wrap:balance}button,select,input[type=range],label{touch-action:ma
 .elist button{content-visibility:auto;contain-intrinsic-size:auto 58px}
 .main:focus,.view:focus{outline:none}
 select,input{background-color:var(--panel);color:var(--text)}
+
+.erow{display:grid;grid-template-columns:1.2fr .8fr 1.6fr .6fr 1fr;gap:8px;align-items:center;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);padding:6px 8px;margin:3px 0;font-size:12px;color:var(--text)}.erow.on{border-color:var(--temp)}.erow:hover{background:var(--panel)}.erow .dim,.defn .dim,.erow i{color:var(--dim);font-style:normal}.tag{font-size:11px;color:var(--dim)}.tag.hot{color:var(--risk)}@media(max-width:640px){.erow{grid-template-columns:1fr 1fr}}
