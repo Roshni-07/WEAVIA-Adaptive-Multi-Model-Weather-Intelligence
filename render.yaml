@@ -1,0 +1,21 @@
+# Render Blueprint: hosts the API on the committed demo snapshot (free tier sleeps when idle; first request is slow).
+# UNTESTED against Render itself: the same commands were verified locally in a clean virtual environment.
+services:
+  - type: web
+    name: weavia-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements-api.txt
+    startCommand: cd backend && uvicorn weavia.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: WEAVIA_DATA
+        value: ../demo_data
+      - key: WEAVIA_CORS
+        value: "*"
+      - key: WEAVIA_RATE_LIMIT
+        value: "600"
+      - key: WEAVIA_LAB_RATE_LIMIT
+        value: "60"

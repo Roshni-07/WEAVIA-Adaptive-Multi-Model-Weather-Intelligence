@@ -1,0 +1,468 @@
+{
+  "generated_at": "2026-10-05T03:44:59.438084+00:00",
+  "splits": {
+    "test": {
+      "start": "2025-03-30 00:00:00+00:00",
+      "end": "2025-12-27 00:00:00+00:00"
+    },
+    "train": {
+      "start": "2023-01-01 00:00:00+00:00",
+      "end": "2024-10-16 00:00:00+00:00"
+    },
+    "val": {
+      "start": "2024-10-17 00:00:00+00:00",
+      "end": "2025-03-29 00:00:00+00:00"
+    }
+  },
+  "tau": {
+    "rain": 0.15,
+    "temp": 0.1,
+    "wind": 0.3
+  },
+  "event_model": {
+    "rain": {
+      "fitted": true,
+      "method": "5-block time cross-fit on train+val",
+      "oof_f1_at_alert_threshold": 0.7129337539432177,
+      "alert_threshold": 0.3,
+      "calibration_events": 494,
+      "oof_coverage": 1.0
+    },
+    "temp": {
+      "fitted": true,
+      "method": "5-block time cross-fit on train+val",
+      "oof_f1_at_alert_threshold": 0.744,
+      "alert_threshold": 0.35,
+      "calibration_events": 111,
+      "oof_coverage": 1.0
+    },
+    "wind": {
+      "fitted": true,
+      "method": "5-block time cross-fit on train+val",
+      "oof_f1_at_alert_threshold": 0.870626525630594,
+      "alert_threshold": 0.44999999999999996,
+      "calibration_events": 625,
+      "oof_coverage": 1.0
+    }
+  },
+  "alert_thr": {
+    "rain": 0.3,
+    "temp": 0.35,
+    "wind": 0.44999999999999996
+  },
+  "thresholds": {
+    "rain": 20.0,
+    "temp": 38.0,
+    "wind": 30.0
+  },
+  "units": {
+    "rain": "mm/6h",
+    "temp": "degC",
+    "wind": "km/h",
+    "rh": "%",
+    "pressure": "hPa"
+  },
+  "leads": [
+    6,
+    12,
+    24,
+    48,
+    72
+  ],
+  "model_ids": [
+    "model_a",
+    "model_b",
+    "model_c",
+    "model_d"
+  ],
+  "n_cases": 109200,
+  "locations": [
+    {
+      "id": "blr",
+      "name": "Bengaluru",
+      "lat": 12.97,
+      "lon": 77.59,
+      "region": "SOUTH",
+      "t_mean": 24.5,
+      "t_amp": 2.8,
+      "monsoon": 0.6,
+      "m_peak": 215,
+      "m_width": 60,
+      "rain_scale": 3.5,
+      "wind_scale": 9,
+      "coastal": false
+    },
+    {
+      "id": "maa",
+      "name": "Chennai",
+      "lat": 13.08,
+      "lon": 80.27,
+      "region": "EAST_COAST",
+      "t_mean": 28.5,
+      "t_amp": 3.0,
+      "monsoon": 0.8,
+      "m_peak": 305,
+      "m_width": 35,
+      "rain_scale": 4.5,
+      "wind_scale": 11,
+      "coastal": true
+    },
+    {
+      "id": "hyd",
+      "name": "Hyderabad",
+      "lat": 17.38,
+      "lon": 78.48,
+      "region": "CENTRAL",
+      "t_mean": 26.5,
+      "t_amp": 3.5,
+      "monsoon": 0.7,
+      "m_peak": 210,
+      "m_width": 45,
+      "rain_scale": 3.5,
+      "wind_scale": 9,
+      "coastal": false
+    },
+    {
+      "id": "cok",
+      "name": "Kochi",
+      "lat": 9.93,
+      "lon": 76.27,
+      "region": "WEST_COAST",
+      "t_mean": 27.3,
+      "t_amp": 1.5,
+      "monsoon": 1.0,
+      "m_peak": 170,
+      "m_width": 50,
+      "rain_scale": 6.0,
+      "wind_scale": 9,
+      "coastal": true
+    },
+    {
+      "id": "bom",
+      "name": "Mumbai",
+      "lat": 19.08,
+      "lon": 72.88,
+      "region": "WEST_COAST",
+      "t_mean": 27.3,
+      "t_amp": 3.0,
+      "monsoon": 1.0,
+      "m_peak": 195,
+      "m_width": 40,
+      "rain_scale": 7.0,
+      "wind_scale": 11,
+      "coastal": true
+    },
+    {
+      "id": "pnq",
+      "name": "Pune",
+      "lat": 18.52,
+      "lon": 73.86,
+      "region": "CENTRAL",
+      "t_mean": 25.0,
+      "t_amp": 3.8,
+      "monsoon": 0.8,
+      "m_peak": 200,
+      "m_width": 40,
+      "rain_scale": 4.0,
+      "wind_scale": 9,
+      "coastal": false
+    },
+    {
+      "id": "amd",
+      "name": "Ahmedabad",
+      "lat": 23.02,
+      "lon": 72.57,
+      "region": "CENTRAL",
+      "t_mean": 27.5,
+      "t_amp": 6.0,
+      "monsoon": 0.7,
+      "m_peak": 205,
+      "m_width": 35,
+      "rain_scale": 3.5,
+      "wind_scale": 10,
+      "coastal": false
+    },
+    {
+      "id": "jai",
+      "name": "Jaipur",
+      "lat": 26.91,
+      "lon": 75.79,
+      "region": "NORTH",
+      "t_mean": 26.0,
+      "t_amp": 7.0,
+      "monsoon": 0.55,
+      "m_peak": 205,
+      "m_width": 35,
+      "rain_scale": 3.0,
+      "wind_scale": 10,
+      "coastal": false
+    },
+    {
+      "id": "del",
+      "name": "Delhi",
+      "lat": 28.61,
+      "lon": 77.21,
+      "region": "NORTH",
+      "t_mean": 25.5,
+      "t_amp": 8.5,
+      "monsoon": 0.6,
+      "m_peak": 205,
+      "m_width": 35,
+      "rain_scale": 3.0,
+      "wind_scale": 9,
+      "coastal": false
+    },
+    {
+      "id": "lko",
+      "name": "Lucknow",
+      "lat": 26.85,
+      "lon": 80.95,
+      "region": "NORTH",
+      "t_mean": 25.5,
+      "t_amp": 8.0,
+      "monsoon": 0.7,
+      "m_peak": 205,
+      "m_width": 40,
+      "rain_scale": 3.2,
+      "wind_scale": 8,
+      "coastal": false
+    },
+    {
+      "id": "pat",
+      "name": "Patna",
+      "lat": 25.59,
+      "lon": 85.14,
+      "region": "EAST_NE",
+      "t_mean": 26.0,
+      "t_amp": 7.5,
+      "monsoon": 0.8,
+      "m_peak": 205,
+      "m_width": 40,
+      "rain_scale": 3.5,
+      "wind_scale": 8,
+      "coastal": false
+    },
+    {
+      "id": "ccu",
+      "name": "Kolkata",
+      "lat": 22.57,
+      "lon": 88.36,
+      "region": "EAST_NE",
+      "t_mean": 27.0,
+      "t_amp": 4.5,
+      "monsoon": 0.9,
+      "m_peak": 205,
+      "m_width": 45,
+      "rain_scale": 5.0,
+      "wind_scale": 9,
+      "coastal": true
+    },
+    {
+      "id": "gau",
+      "name": "Guwahati",
+      "lat": 26.14,
+      "lon": 91.74,
+      "region": "EAST_NE",
+      "t_mean": 24.5,
+      "t_amp": 5.0,
+      "monsoon": 1.0,
+      "m_peak": 185,
+      "m_width": 60,
+      "rain_scale": 6.0,
+      "wind_scale": 7,
+      "coastal": false
+    },
+    {
+      "id": "bbi",
+      "name": "Bhubaneswar",
+      "lat": 20.3,
+      "lon": 85.82,
+      "region": "EAST_COAST",
+      "t_mean": 27.5,
+      "t_amp": 4.0,
+      "monsoon": 0.9,
+      "m_peak": 210,
+      "m_width": 40,
+      "rain_scale": 5.0,
+      "wind_scale": 10,
+      "coastal": true
+    },
+    {
+      "id": "vtz",
+      "name": "Visakhapatnam",
+      "lat": 17.69,
+      "lon": 83.22,
+      "region": "EAST_COAST",
+      "t_mean": 27.8,
+      "t_amp": 3.5,
+      "monsoon": 0.8,
+      "m_peak": 240,
+      "m_width": 50,
+      "rain_scale": 4.0,
+      "wind_scale": 11,
+      "coastal": true
+    },
+    {
+      "id": "nag",
+      "name": "Nagpur",
+      "lat": 21.15,
+      "lon": 79.09,
+      "region": "CENTRAL",
+      "t_mean": 27.0,
+      "t_amp": 6.0,
+      "monsoon": 0.7,
+      "m_peak": 205,
+      "m_width": 40,
+      "rain_scale": 3.5,
+      "wind_scale": 9,
+      "coastal": false
+    },
+    {
+      "id": "bho",
+      "name": "Bhopal",
+      "lat": 23.26,
+      "lon": 77.41,
+      "region": "CENTRAL",
+      "t_mean": 25.5,
+      "t_amp": 6.0,
+      "monsoon": 0.7,
+      "m_peak": 205,
+      "m_width": 40,
+      "rain_scale": 3.5,
+      "wind_scale": 9,
+      "coastal": false
+    },
+    {
+      "id": "ixc",
+      "name": "Chandigarh",
+      "lat": 30.73,
+      "lon": 76.78,
+      "region": "NORTH",
+      "t_mean": 24.0,
+      "t_amp": 8.5,
+      "monsoon": 0.6,
+      "m_peak": 205,
+      "m_width": 35,
+      "rain_scale": 3.5,
+      "wind_scale": 8,
+      "coastal": false
+    },
+    {
+      "id": "sxr",
+      "name": "Srinagar",
+      "lat": 34.08,
+      "lon": 74.8,
+      "region": "NORTH",
+      "t_mean": 13.0,
+      "t_amp": 11.0,
+      "monsoon": 0.25,
+      "m_peak": 120,
+      "m_width": 60,
+      "rain_scale": 2.5,
+      "wind_scale": 7,
+      "coastal": false
+    },
+    {
+      "id": "trv",
+      "name": "Thiruvananthapuram",
+      "lat": 8.52,
+      "lon": 76.94,
+      "region": "WEST_COAST",
+      "t_mean": 27.5,
+      "t_amp": 1.3,
+      "monsoon": 0.9,
+      "m_peak": 170,
+      "m_width": 55,
+      "rain_scale": 5.5,
+      "wind_scale": 8,
+      "coastal": true
+    }
+  ],
+  "model_version": "weavia-meta-lgbm-0.1",
+  "data_mode": "synthetic",
+  "data_notice": "SYNTHETIC DEVELOPMENT DATA. Four synthetic models with designed context-dependent errors. Verification numbers validate the WEAVIA pipeline; they are NOT evidence of real-world forecast skill. DEMO SNAPSHOT: 60 issues (14 Jun 2025 to 12 Aug 2025) of the full run. Verification figures summarise the full run, not this window.",
+  "seed": 7,
+  "models": {
+    "model_a": {
+      "model_id": "model_a",
+      "name": "Model A",
+      "kind": "NWP",
+      "label": "Physics NWP (synthetic)",
+      "resolution_deg": 0.25,
+      "provider": "synthetic",
+      "synthetic": true
+    },
+    "model_b": {
+      "model_id": "model_b",
+      "name": "Model B",
+      "kind": "NWP",
+      "label": "High-res convective NWP (synthetic)",
+      "resolution_deg": 0.1,
+      "provider": "synthetic",
+      "synthetic": true
+    },
+    "model_c": {
+      "model_id": "model_c",
+      "name": "Model C",
+      "kind": "AI",
+      "label": "AI weather model (synthetic)",
+      "resolution_deg": 0.25,
+      "provider": "synthetic",
+      "synthetic": true
+    },
+    "model_d": {
+      "model_id": "model_d",
+      "name": "Model D",
+      "kind": "ENSEMBLE",
+      "label": "Ensemble mean (synthetic)",
+      "resolution_deg": 0.5,
+      "provider": "synthetic",
+      "synthetic": true
+    }
+  },
+  "validation_reports": {
+    "model_a": {
+      "model_id": "model_a",
+      "n_rows": 546000,
+      "nan_frac": 0.0,
+      "out_of_bounds": {},
+      "duplicates": 0,
+      "ok": true,
+      "issues": []
+    },
+    "model_b": {
+      "model_id": "model_b",
+      "n_rows": 546000,
+      "nan_frac": 0.0,
+      "out_of_bounds": {},
+      "duplicates": 0,
+      "ok": true,
+      "issues": []
+    },
+    "model_c": {
+      "model_id": "model_c",
+      "n_rows": 546000,
+      "nan_frac": 0.0,
+      "out_of_bounds": {},
+      "duplicates": 0,
+      "ok": true,
+      "issues": []
+    },
+    "model_d": {
+      "model_id": "model_d",
+      "n_rows": 546000,
+      "nan_frac": 0.0,
+      "out_of_bounds": {},
+      "duplicates": 0,
+      "ok": true,
+      "issues": []
+    }
+  },
+  "truth_source": "synthetic truth",
+  "demo_snapshot": {
+    "issues": 60,
+    "from": "2025-06-14 00:00:00",
+    "to": "2025-08-12 00:00:00",
+    "events": 81
+  }
+}

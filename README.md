@@ -48,7 +48,8 @@
 | 2 | [Verification](docs/VERIFICATION.md) | The test protocol, confidence intervals, and what is still wrong |
 | 3 | [Architecture](docs/ARCHITECTURE.md) | Pipeline, modules, provider contract |
 | 4 | [`backend/tests`](backend/tests) | 119 automated tests, including leakage checks that fail when a leak is injected |
-| 5 | [Real-data plan](docs/REAL_DATA_PLAN.md) | How it moves to real Open-Meteo data and runs every 6 hours |
+| 5 | [Hosting the demo](docs/DEPLOY.md) | Free-tier hosting of the demo snapshot (Render + Vercel), cold-start note, what is verified |
+| [Real-data plan](docs/REAL_DATA_PLAN.md) | How it moves to real Open-Meteo data and runs every 6 hours |
 
 **What is proven, and what is not**
 
@@ -74,7 +75,9 @@ Every screen carries a banner naming its data source. Where a confidence interva
 
 *Screenshots are from the synthetic development dataset (see the banner in each image), not real forecasts.*
 
-**Run it yourself** (about 4 minutes, Python 3.12 and Node 18+):
+**Fastest way to run it** (Windows, uses the committed 24 MB demo snapshot, no 4-minute pipeline): `scripts\\run_demo.bat`. It starts the API and the dashboard at http://localhost:3000. Same synthetic data, last 60 issues only.
+
+**Run the full pipeline yourself** (about 4 minutes, Python 3.12 and Node 18+):
 
 ```bash
 cd backend

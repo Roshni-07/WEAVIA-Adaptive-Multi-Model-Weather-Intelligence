@@ -105,6 +105,9 @@ class Store:
     # ---------------------------------------------------------------- derived
     def spread_quantiles(self, var: str, lead: int) -> tuple[float, float]:
         """Terciles-ish thresholds of weighted model spread on TRAIN rows (LOW/MODERATE/HIGH)."""
+        if self._spread_q is None and (self.dir / "spread_q.json").exists():     # demo snapshots ship these precomputed
+            raw = json.loads((self.dir / "spread_q.json").read_text())
+            self._spread_q = {(k.split("|")[0], int(k.split("|")[1])): tuple(v) for k, v in raw.items()}
         if self._spread_q is None:
             b = self.blend.reset_index()
             tr = b[b.split == "train"]
