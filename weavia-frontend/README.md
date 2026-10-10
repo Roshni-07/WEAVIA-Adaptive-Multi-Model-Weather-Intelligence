@@ -5,7 +5,7 @@ Next.js 14 · TypeScript · React Three Fiber · Zustand. Consumes the FastAPI o
 ## Run
 ```bash
 # 1. backend artifacts + API
-cd backend && pip install -r requirements.txt fastapi uvicorn httpx pyarrow
+cd backend && pip install -r requirements.txt
 python -u -W ignore -m weavia.pipeline          # writes data/ (~2-3 min, 3-year synthetic run: pass days=1095)
 uvicorn weavia.api.main:app --port 8000
 # 2. frontend

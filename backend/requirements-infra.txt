@@ -1,0 +1,7 @@
+# PLANNED infrastructure (database, cache, background jobs). Nothing in the code imports these yet.
+# Install only when the db/ and docker-compose work lands.
+sqlalchemy>=2.0
+psycopg[binary]>=3.1
+geoalchemy2>=0.14
+redis>=5.0
+celery>=5.3

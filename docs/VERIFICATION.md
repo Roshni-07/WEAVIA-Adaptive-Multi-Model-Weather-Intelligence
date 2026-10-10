@@ -129,7 +129,7 @@ Until then, treat all skill numbers as validation of the pipeline only.
 
 ```bash
 cd backend
-pip install -r requirements.txt fastapi uvicorn httpx pyarrow
+pip install -r requirements.txt
 python -u -W ignore -c "from weavia.pipeline import run; run('data', days=1095)"
 ```
 

@@ -84,7 +84,7 @@ Every screen carries a banner naming its data source. Where a confidence interva
 
 ```bash
 cd backend
-pip install -r requirements.txt fastapi uvicorn httpx pyarrow
+pip install -r requirements.txt
 python -u -W ignore -c "from weavia.pipeline import run; run('data', days=1095)"
 uvicorn weavia.api.main:app --port 8000
 # second terminal
@@ -388,7 +388,7 @@ Data from Open-Meteo is licensed CC BY 4.0. Attribution: weather data by [Open-M
 
 ```bash
 cd backend
-pip install -r requirements.txt fastapi uvicorn httpx pyarrow
+pip install -r requirements.txt
 
 # Build the data store (about 135 s). Run in the foreground.
 python -u -W ignore -c "from weavia.pipeline import run; run('data', days=1095)"
