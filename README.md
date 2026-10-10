@@ -19,6 +19,8 @@
 ![React Three Fiber](https://img.shields.io/badge/R3F-GLOBE-1A1A1A?labelColor=555555&style=flat-square&logo=threedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TYPESCRIPT-STRICT-3178C6?labelColor=555555&style=flat-square&logo=typescript&logoColor=white)
 
+[🚀 Live demo](https://weavia-adaptive-multi-model-weather.vercel.app) ·
+[🎥 Intro Video](#-intro-video) ·
 [📄 PRD](docs/PRD.md) ·
 [🧩 Architecture](docs/ARCHITECTURE.md) ·
 [🛠️ Tech Stack](#11-technology) ·
@@ -38,6 +40,8 @@
 ## 🧭 For judges: 60-second path
 
 **What it is.** WEAVIA learns which weather model to trust, for each station, lead time, season and weather regime. It blends them with those weights, attaches uncertainty and IMD-aligned extreme-weather guidance, and then checks itself against what actually happened. Built for SIH26081 (MoES).
+
+**Live demo:** [weavia-adaptive-multi-model-weather.vercel.app](https://weavia-adaptive-multi-model-weather.vercel.app). It serves the synthetic benchmark (60 monsoon issues) and says so on every screen. It runs on free hosting that sleeps when idle, so **the first load can take about a minute**.
 
 **Read, no setup needed**
 
@@ -86,6 +90,17 @@ uvicorn weavia.api.main:app --port 8000
 # second terminal
 cd weavia-frontend && npm install && npm run dev      # http://localhost:3000
 ```
+
+---
+
+## 🎥 Intro Video
+
+*A short walkthrough of the problem statement and our solution.*
+
+<!-- Replace with your video. YouTube: [![WEAVIA intro](https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=VIDEO_ID) -->
+▶️ *Video coming soon.*
+
+---
 
 ## At a glance
 

@@ -16,6 +16,24 @@ export default function Extremes() {
   const hwv = v?.verification?.heat_wave?.[String(day)];
   const rv = v?.verification?.heavy_rain?.[String(day)];
   const gain = hwv?.f1_gain_vs_equal;
+  const msg = error ? String((error as any).message ?? error) : "";
+  if (msg.includes("No daily extremes")) {        // synthetic demo: say so plainly instead of showing empty panels and a raw error
+    const doc = (f: string) => `https://github.com/Roshni-07/WEAVIA-Adaptive-Multi-Model-Weather-Intelligence/blob/main/docs/${f}`;
+    return (
+      <div className="page">
+        <div className="bar"><h1>Extreme-weather guidance</h1></div>
+        <Panel title="Not available in this demo" sub="this hosted copy runs on the synthetic benchmark">
+          <p className="defn">Heat-wave and heavy-rain guidance follow IMD criteria: terrain-specific heat-wave thresholds with departure from the station normal and a 2-station, 2-day persistence rule, plus IMD 24-hour rainfall classes. They are computed in real-data mode from Open-Meteo forecasts, which this demo does not run.</p>
+          <p className="defn">This demo serves synthetic data, so there is nothing real to show here, and nothing is faked. The rules, calibration and verification with confidence intervals are implemented and tested in the repository.</p>
+          <p className="defn">
+            <a href={doc("PS_ALIGNMENT.md")} target="_blank" rel="noopener noreferrer">PS alignment matrix</a>{" · "}
+            <a href={doc("REAL_DATA_PLAN.md")} target="_blank" rel="noopener noreferrer">Real-data plan</a>{" · "}
+            <a href={doc("VERIFICATION.md")} target="_blank" rel="noopener noreferrer">Verification</a>
+          </p>
+        </Panel>
+      </div>
+    );
+  }
   return (
     <div className="page">
       <div className="bar"><h1>Extreme-weather guidance</h1>
