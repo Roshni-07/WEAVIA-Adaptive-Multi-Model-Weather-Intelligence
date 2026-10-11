@@ -2,6 +2,7 @@
 
     python -m weavia.live check                      # confirm model ids and endpoints (needs internet)
     python -m weavia.live fit   --out data_live      # back-fill from Previous Runs + archive truth, train
+    python -m weavia.live extremes --out data_live   # redo only the daily IMD products (after a rate-limit skip)
     python -m weavia.live cycle --out data_live      # one live cycle: fetch, score, publish
     python -m weavia.live loop  --out data_live      # cycle every 6 h (refit daily)
     WEAVIA_DATA=data_live uvicorn weavia.api.main:app
@@ -37,7 +38,7 @@ from .locations import LOCATIONS
 from .pipeline import CASE_COLS, run_from_sources
 from .providers.base import FetchSpec
 from .providers.openmeteo import (DEFAULT_MODELS, MODEL_CATALOG, OpenMeteoArchiveObservations, OpenMeteoClient,
-                                  OpenMeteoModelProvider, check_models, floor_to_cycle)
+                                  OpenMeteoError, OpenMeteoModelProvider, check_models, floor_to_cycle)
 from .regime_labels import label_regime
 
 REAL_LEADS = (24, 48, 72)
@@ -103,28 +104,61 @@ def fit(out_dir="data_live", models=DEFAULT_MODELS, days=365, truth_lag_days=6, 
                            use_issue_obs=False, save_full=True, t0=t0)
     for f in ("live_status.json", "daily_extremes.parquet", "daily_verification.json"):
         (Path(out_dir) / f).unlink(missing_ok=True)
-    ver["daily_extremes"] = _fit_daily(Path(out_dir), arch, locations, pd.concat(daily_parts, ignore_index=True), log)
+    daily_fc = pd.concat(daily_parts, ignore_index=True)
+    daily_fc.to_parquet(Path(out_dir) / "daily_fc.parquet")             # saved first, so the daily step can resume
+    arch.daily.to_parquet(Path(out_dir) / "daily_truth.parquet")
+    ver["daily_extremes"] = _fit_daily(Path(out_dir), arch, locations, daily_fc, arch.daily, log)
     return ver
 
 
-def _fit_daily(out: Path, arch, locations, daily_fc: pd.DataFrame, log) -> dict:
-    """IMD-aligned daily products (heat-wave indicator, 24 h rain). A failure here never breaks the main fit."""
+def _normals(out: Path, arch, locations, log) -> pd.DataFrame:
+    """Cached normals, else fetched: the standard 1991-2020 first, then 2011-2020 (lighter) if the service refuses."""
+    path = out / "normals.parquet"
+    if path.exists():
+        return pd.read_parquet(path)
     try:
-        normals = arch.fetch_normals(locations)
+        n = arch.fetch_normals(locations, 1991, 2020, pace_s=1.0)
+    except OpenMeteoError as e:
+        log(f"[extremes] 1991-2020 normals refused ({e}). Trying 2011-2020.")
+        n = arch.fetch_normals(locations, 2011, 2020, pace_s=1.0)
+    n.to_parquet(path)
+    return n
+
+
+def _fit_daily(out: Path, arch, locations, daily_fc: pd.DataFrame, truth_daily: pd.DataFrame, log) -> dict:
+    """IMD-aligned daily products (heat-wave indicator, 24 h rain). A failure here never breaks the main fit; rerun
+    it later with `python -m weavia.live extremes`, which reuses the saved inputs and cached normals."""
+    try:
+        normals = _normals(out, arch, locations, log)
         blend = pd.read_parquet(out / "blend.parquet")
-        df, bands = extremes.build_products(daily_fc, blend, list(MODELS), arch.daily, normals)
+        df, bands = extremes.build_products(daily_fc, blend, list(MODELS), truth_daily, normals)
         if df.empty:
             raise RuntimeError("no daily rows could be matched to WEAVIA cases")
         ver = extremes.verify_daily(df, list(MODELS))
-        normals.to_parquet(out / "normals.parquet")
+        ver["normals_basis"] = str(normals.normal_basis.iloc[0]) if "normal_basis" in normals else "unknown"
         joblib.dump(bands, out / "daily_bands.joblib")
         _write_atomic(df, out / "daily_extremes.parquet")
         (out / "daily_verification.json").write_text(json.dumps(ver, indent=2, default=str))
-        log(f"[extremes] {len(df):,} daily rows, normals for {normals.location_id.nunique()} stations")
-        return {"state": "ok", "rows": int(len(df))}
+        log(f"[extremes] {len(df):,} daily rows, normals for {normals.location_id.nunique()} stations ({ver['normals_basis']})")
+        return {"state": "ok", "rows": int(len(df)), "normals_basis": ver["normals_basis"]}
     except Exception as e:                          # noqa: BLE001
         log(f"[extremes] skipped: {type(e).__name__}: {e}")
+        log("[extremes] the forecast itself is unaffected. Rerun later with: python -m weavia.live extremes --out " + str(out))
         return {"state": "skipped", "reason": f"{type(e).__name__}: {e}"}
+
+
+def extremes_resume(out_dir="data_live", client=None, locations=LOCATIONS, log=print) -> dict:
+    """Redo only the daily-extremes step from the inputs `fit` saved. Fetches nothing but missing normals."""
+    out = Path(out_dir)
+    meta_path = out / "meta.json"
+    if not meta_path.exists() or not (out / "daily_fc.parquet").exists():
+        raise FileNotFoundError(f"{out}: run `python -m weavia.live fit` first (it saves the daily inputs)")
+    meta = json.loads(meta_path.read_text())
+    _set_models(meta["model_ids"], meta["leads"])
+    arch = OpenMeteoArchiveObservations(client or OpenMeteoClient())
+    daily_fc = pd.read_parquet(out / "daily_fc.parquet")
+    truth = pd.read_parquet(out / "daily_truth.parquet")
+    return _fit_daily(out, arch, locations, daily_fc, truth, log)
 
 
 # ----------------------------------------------------------------------------------------------- cycle
@@ -268,7 +302,7 @@ def loop(out_dir="data_live", client=None, refit_hours=24, log=print):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="weavia.live")
-    ap.add_argument("cmd", choices=["check", "fit", "cycle", "loop"])
+    ap.add_argument("cmd", choices=["check", "fit", "extremes", "cycle", "loop"])
     ap.add_argument("--out", default="data_live")
     ap.add_argument("--days", type=int, default=365)
     ap.add_argument("--truth-lag-days", type=int, default=6)
@@ -280,6 +314,8 @@ def main(argv=None):
         raise SystemExit(0 if all(v == "ok" for v in rep.values()) else 1)
     if a.cmd == "fit":
         fit(a.out, days=a.days, truth_lag_days=a.truth_lag_days)
+    elif a.cmd == "extremes":
+        print(json.dumps(extremes_resume(a.out), indent=2, default=str))
     elif a.cmd == "cycle":
         print(json.dumps(cycle(a.out), indent=2, default=str))
     else:

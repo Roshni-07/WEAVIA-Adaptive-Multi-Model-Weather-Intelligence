@@ -11,3 +11,4 @@ data_live/
 .pytest_cache/
 *.log
 *.tsbuildinfo
+check_output.txt

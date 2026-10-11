@@ -2,7 +2,7 @@
 
 **Smart India Hackathon 2026 · SIH26081 · Ministry of Earth Sciences (MoES)**
 
-Status: **built and tested offline, not yet run against the real service.** Phases 1 to 3 below exist in code (`providers/openmeteo.py`, `live.py`, `infer.py`) and pass tests on a fake of the documented Open-Meteo API backed by the synthetic world. The development sandbox has no outbound internet, so the first real run is yours: `python -m weavia.live check`. Items marked *verify* depend on provider terms and coverage that must be confirmed.
+Status: **built and tested offline; endpoints and model ids confirmed on the real service, full run still to do.** `python -m weavia.live check` passed 10/10 on the author's machine (Oct 2026): all four model ids, the live and Previous Runs endpoints, the archive and the daily normals respond. What has not been done is a full `fit` and `cycle`, so there are no real results yet. Phases 1 to 3 below exist in code (`providers/openmeteo.py`, `live.py`, `infer.py`) and pass tests on a fake backed by the synthetic world. Items marked *verify* depend on provider terms and coverage that must be confirmed.
 
 ## 1. Two jobs, two data paths
 
@@ -78,7 +78,7 @@ Rules:
 
 | Phase | Deliverable | Status |
 |---|---|---|
-| 0 | Check per-model history, model ids, endpoint parameters, provider terms, truth access | **Yours to run.** `python -m weavia.live check` probes every model on both endpoints plus the archive and prints OK or the exact failure |
+| 0 | Check per-model history, model ids, endpoint parameters, provider terms, truth access | **Partly done.** `check` passed 10/10 (ids, endpoints, date parameters, daily normals). Still open: history depth over a full year, provider terms, truth access |
 | 1 | Provider (Previous Runs, leads 24/48/72) and archive truth provider | Built. 11 provider tests, including retries, 429, 400, partial windows, wrong location counts |
 | 2 | Real back-test through the existing verification protocol | Code path built (`weavia.live fit`). **Not run on real data.** Results will be "vs reanalysis" |
 | 3 | Live 6-hourly cycle, scheduler loop, freshness, missing-model handling | Built. 10 end-to-end tests: scoring equals the pipeline exactly, no hindsight, idempotent, missing model, total outage, API reload, stale flag |
@@ -93,12 +93,30 @@ Rules:
 
 ### What they cannot prove
 
-- That the model ids (`ecmwf_ifs025`, `ecmwf_aifs025_single`, `gfs_global`, `icon_global`) and the Previous Runs `start_date`/`end_date` parameters behave as assumed. The fake follows the documentation, not the live service.
+- ~~That the model ids and the Previous Runs `start_date`/`end_date` parameters are accepted~~ **Confirmed** by `check` (10/10). Still unproven: that a year of history downloads without rate limiting, and that the archive's daily aggregates match what the extremes code expects.
 - Any real forecast skill.
 
 ### Daily IMD-aligned products
 
 `fit` also builds daily products from the same hourly responses: IST-day maximum temperature, IMD-day (08:30 to 08:30 IST) rainfall, per-station normals (1991 to 2020 reanalysis, within 7 days of each date), calibrated bands, and verification with date-block bootstrap CIs. `cycle` adds them for each live issue. A failure here never breaks the main fit or cycle: it is reported as `skipped` in the status. Their weights are the trust weights of the nearest 6-hourly case, so they inherit WEAVIA's context-aware weighting. The first real `fit` must also confirm that the archive accepts daily aggregates, which the offline fake cannot prove.
+
+### First real run (Oct 2026, author's machine)
+
+`python -m weavia.live fit --out data_live --days 90` completed in 135 seconds on real Open-Meteo data.
+
+| Item | Result |
+|---|---|
+| History downloaded | 108,960 rows for each of IFS, AIFS, GFS, ICON (24/48/72 h leads) |
+| Truth | 36,880 rows from the Open-Meteo archive (reanalysis) |
+| Cases | 21,420 (train 12,900, validation 3,240, test 5,280) |
+| Regime classifier | Test accuracy 0.786 against a majority baseline of 0.781. **No meaningful gain** on 90 days of real data |
+| Rain event model | Fitted. Out-of-fold F1 0.40 at the chosen alert threshold (193 calibration events) |
+| Temperature and wind event models | **Not fitted**: only 3 events in 90 days (a monsoon-season window), fewer than the 30 required |
+| Daily extremes | **Skipped**: the 30-year normals request returned HTTP 429 (rate limit) |
+
+No skill figure from this run has been published here. The verification results (MAE changes with confidence intervals) are in `data_live/verification.json` and the Models & Skill view, and they should be read with the small sample in mind: 90 days is one season.
+
+What changed after this run: normals are now fetched one station at a time in 10-year chunks, paced, and cached; a 429 without a retry hint waits 30, 60, 90 seconds; the daily inputs are saved so `python -m weavia.live extremes --out data_live` can finish the daily step later without redownloading; and if 1991 to 2020 is refused it falls back to 2011 to 2020 and labels the basis.
 
 ### Known design limits
 

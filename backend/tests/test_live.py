@@ -26,6 +26,15 @@ def world():
 
 @pytest.fixture(scope="module")
 def art(world, tmp_path_factory):
+    import os
+    pre = os.environ.get("WEAVIA_TEST_ART_FIT")            # dev speed-up: reuse a fit made with the same arguments
+    if pre and os.path.exists(os.path.join(pre, "daily_fc.parquet")):
+        saved = (list(config.MODELS), list(config.LEADS))
+        meta = json.loads(open(os.path.join(pre, "meta.json")).read())
+        config.MODELS[:], config.LEADS[:] = meta["model_ids"], meta["leads"]
+        yield __import__("pathlib").Path(pre), json.loads(open(os.path.join(pre, "verification.json")).read()) | {"daily_extremes": {"state": "ok"}}
+        config.MODELS[:], config.LEADS[:] = saved
+        return
     out = tmp_path_factory.mktemp("live")
     saved = (list(config.MODELS), list(config.LEADS))
     client = make_client(WorldFake(world, ISSUE))
@@ -248,3 +257,68 @@ def test_extremes_404_explains_when_daily_products_are_absent(art, tmp_path, mon
         r = c.get(route)
         assert r.status_code == 404 and "No daily extremes" in r.json()["detail"]
     assert c.get("/api/v1/health").status_code == 200                     # the rest of the API is unaffected
+
+
+# ----------------------------------------------------------------------------- resumable daily step
+@pytest.fixture(scope="module")
+def art_small(world, tmp_path_factory):
+    """A lighter fit (150 days) so the resumable-step tests stay fast."""
+    import os
+    pre = os.environ.get("WEAVIA_TEST_SMALL_FIT")          # dev speed-up: reuse a fit made with the same arguments
+    if pre and os.path.exists(os.path.join(pre, "daily_fc.parquet")):
+        saved = (list(config.MODELS), list(config.LEADS))
+        meta = json.loads(open(os.path.join(pre, "meta.json")).read())
+        config.MODELS[:], config.LEADS[:] = meta["model_ids"], meta["leads"]
+        yield __import__("pathlib").Path(pre), {}
+        config.MODELS[:], config.LEADS[:] = saved
+        return
+    out = tmp_path_factory.mktemp("live_small")
+    saved = (list(config.MODELS), list(config.LEADS))
+    ver = live.fit(str(out), days=150, now=FIT_NOW, client=make_client(WorldFake(world, ISSUE)), log=lambda *_: None)
+    yield out, ver
+    config.MODELS[:], config.LEADS[:] = saved
+
+
+def test_fit_saves_daily_inputs_so_the_step_can_resume(art_small):
+    out, _ = art_small
+    assert (out / "daily_fc.parquet").exists() and (out / "daily_truth.parquet").exists()
+
+
+def test_extremes_resume_rebuilds_from_saved_inputs_and_fetches_only_normals(art_small, world, tmp_path):
+    out = _fresh(art_small, tmp_path)
+    for f in ("daily_extremes.parquet", "daily_verification.json", "daily_bands.joblib", "normals.parquet"):
+        (out / f).unlink()
+    fake = WorldFake(world, ISSUE)
+    res = live.extremes_resume(str(out), client=make_client(fake), log=lambda *_: None)
+    assert res["state"] == "ok" and "reanalysis" in res["normals_basis"]
+    assert (out / "daily_extremes.parquet").exists() and (out / "normals.parquet").exists()
+    assert fake.requests and all("daily" in r.url.params for r in fake.requests)         # no forecast or truth refetch
+    assert "normals_basis" in json.loads((out / "daily_verification.json").read_text())
+
+
+def test_cached_normals_are_not_refetched(art_small, world, tmp_path):
+    out = _fresh(art_small, tmp_path)
+    (out / "daily_extremes.parquet").unlink()
+    fake = WorldFake(world, ISSUE)
+    assert live.extremes_resume(str(out), client=make_client(fake), log=lambda *_: None)["state"] == "ok"
+    assert fake.requests == []                                                           # normals.parquet was reused
+
+
+def test_refused_30_year_normals_fall_back_to_10_years_and_say_so(art_small, world, tmp_path, monkeypatch):
+    from weavia.providers.openmeteo import OpenMeteoArchiveObservations, OpenMeteoError
+    out = _fresh(art_small, tmp_path)
+    for f in ("daily_extremes.parquet", "normals.parquet"):
+        (out / f).unlink()
+    real = OpenMeteoArchiveObservations.fetch_normals
+    def flaky(self, locations, start_year=1991, end_year=2020, **kw):
+        if start_year == 1991:
+            raise OpenMeteoError("gave up after 5 attempts (HTTP 429)")
+        return real(self, locations, start_year, end_year, **kw)
+    monkeypatch.setattr(OpenMeteoArchiveObservations, "fetch_normals", flaky)
+    res = live.extremes_resume(str(out), client=make_client(WorldFake(world, ISSUE)), log=lambda *_: None)
+    assert res["state"] == "ok" and res["normals_basis"].startswith("2011-2020")
+
+
+def test_extremes_resume_requires_a_fit(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        live.extremes_resume(str(tmp_path / "nothing"))

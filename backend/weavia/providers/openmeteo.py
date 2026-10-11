@@ -11,10 +11,9 @@ Read before trusting any number produced from this module:
   * Previous Runs gives day offsets only, so back-test leads are 24/48/72 h (not 6/12 h).
   * Live issue time is the 6-hourly fetch cycle (the forecast API does not return the model run's init time).
     That is the time WE observed the forecast, so it is free of hindsight.
-  * Model API ids below follow Open-Meteo naming conventions and are NOT yet confirmed against the live service
-    from the development sandbox (no outbound access). Run `python -m weavia.live check` first. A wrong id fails
-    loudly, it never silently produces data.
-  * The same check exercises start_date/end_date support on the previous-runs endpoint.
+  * Model API ids below were confirmed by `python -m weavia.live check` on a machine with internet (10/10 OK, Oct 2026).
+    A full year-long fit has not been run yet, so rate limits and history gaps are still untested.
+  * The same check exercised start_date/end_date on the previous-runs endpoint and daily aggregates on the archive.
 """
 from __future__ import annotations
 
@@ -91,6 +90,9 @@ class OpenMeteoClient:
                     ra = r.headers.get("Retry-After")
                     if ra and ra.isdigit() and attempt < self.retries:
                         self.sleep(min(int(ra), 120))
+                        continue
+                    if r.status_code == 429 and attempt < self.retries:   # quota window: short backoffs cannot clear it
+                        self.sleep(min(120, 30 * (attempt + 1)))
                         continue
                 else:
                     raise OpenMeteoError(f"HTTP {r.status_code} from {url}")
@@ -297,23 +299,29 @@ class OpenMeteoArchiveObservations(ObservationProvider):
         df = pd.DataFrame(self._daily, columns=["valid_day", "location_id", "variable", "value"])
         return df.drop_duplicates(["valid_day", "location_id", "variable"]).reset_index(drop=True)
 
-    def fetch_normals(self, locations, start_year: int = 1991, end_year: int = 2020, window_days: int = 7) -> pd.DataFrame:
+    def fetch_normals(self, locations, start_year: int = 1991, end_year: int = 2020, window_days: int = 7,
+                      pace_s: float = 0.0) -> pd.DataFrame:
         """Per-station normal daily maximum temperature by day of year: the mean of the daily maximum over
         start_year..end_year, within +/- window_days of the calendar day. REANALYSIS-based, so it is not IMD's
-        own gridded normal. Returns location_id, doy (1..366), normal_tmax."""
+        own gridded normal. Returns location_id, doy (1..366), normal_tmax, normal_basis.
+
+        One station per request and 10-year chunks keep each call light (a single 30-year, 20-station request is
+        what trips the free-tier rate limit). pace_s sleeps between requests."""
         rows = []
-        for a, b in _chunks(pd.Timestamp(f"{start_year}-01-01", tz="UTC"), pd.Timestamp(f"{end_year}-12-31", tz="UTC"), 3653):
-            params = {**_coords(locations), "daily": "temperature_2m_max", "start_date": a, "end_date": b, "timezone": "Asia/Kolkata"}
-            payload = _as_list(self.client.get_json(ARCHIVE_URL, params))
-            if len(payload) != len(locations):
-                raise OpenMeteoError(f"normals: asked for {len(locations)} locations, got {len(payload)}")
-            for loc, item in zip(locations, payload):
-                d = item.get("daily") or {}
+        for loc in locations:
+            for a, b in _chunks(pd.Timestamp(f"{start_year}-01-01", tz="UTC"), pd.Timestamp(f"{end_year}-12-31", tz="UTC"), 3653):
+                params = {**_coords([loc]), "daily": "temperature_2m_max", "start_date": a, "end_date": b, "timezone": "Asia/Kolkata"}
+                payload = _as_list(self.client.get_json(ARCHIVE_URL, params))
+                if len(payload) != 1:
+                    raise OpenMeteoError(f"normals: asked for 1 location, got {len(payload)}")
+                d = payload[0].get("daily") or {}
                 if "temperature_2m_max" not in d:
                     raise OpenMeteoError("normals response lacks 'temperature_2m_max'")
                 t = pd.to_datetime(d["time"])
                 v = pd.to_numeric(pd.Series(d["temperature_2m_max"], dtype="object"), errors="coerce").to_numpy(dtype=float)
                 rows.append(pd.DataFrame({"location_id": loc.id, "doy": t.dayofyear, "tmax": v}))
+                if pace_s:
+                    time.sleep(pace_s)
         raw = pd.concat(rows, ignore_index=True).dropna()
         out = []
         for lid, g in raw.groupby("location_id"):
@@ -321,7 +329,9 @@ class OpenMeteoArchiveObservations(ObservationProvider):
             ext = pd.concat([by_doy.iloc[-window_days:], by_doy, by_doy.iloc[:window_days]])
             sm = ext.rolling(2 * window_days + 1, center=True, min_periods=1).mean().iloc[window_days:-window_days]
             out.append(pd.DataFrame({"location_id": lid, "doy": range(1, 367), "normal_tmax": sm.values}))
-        return pd.concat(out, ignore_index=True)
+        res = pd.concat(out, ignore_index=True)
+        res["normal_basis"] = f"{start_year}-{end_year} reanalysis (Open-Meteo archive)"
+        return res
 
     def fetch(self, spec: FetchSpec) -> pd.DataFrame:
         v0, v1 = _utc(spec.start), _utc(spec.end)

@@ -116,3 +116,22 @@ def test_unknown_model_key_and_mode_rejected():
         OpenMeteoModelProvider("nope")
     with pytest.raises(ValueError):
         OpenMeteoModelProvider("ifs", "bogus")
+
+
+def test_429_without_retry_after_waits_out_a_quota_window():
+    waits = []
+    fake = FakeOpenMeteo(fail_first=2, fail_status=429, retry_after=False)
+    from weavia.providers.openmeteo import OpenMeteoClient
+    import httpx
+    client = OpenMeteoClient(client=httpx.Client(transport=httpx.MockTransport(fake)), sleep=waits.append, retries=4)
+    OpenMeteoModelProvider("icon", "live", client=client, issue_time=NOW).fetch(FetchSpec(LOCS[:1], leads=(24,)))
+    assert waits == [30, 60]                                # a 2 s backoff cannot clear a quota window
+
+
+def test_normals_use_one_light_request_per_station_and_chunk():
+    client, fake = make_client()
+    n = OpenMeteoArchiveObservations(client).fetch_normals(LOCS, 1991, 2020)
+    daily = [r for r in fake.requests if "daily" in r.url.params]
+    assert len(daily) == len(LOCS) * 3                      # one station x three 10-year chunks each, never all stations at once
+    assert all("," not in r.url.params["latitude"] for r in daily)
+    assert n.normal_basis.iloc[0] == "1991-2020 reanalysis (Open-Meteo archive)" and n.groupby("location_id").doy.nunique().eq(366).all()

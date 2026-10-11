@@ -29,16 +29,16 @@ def base_value(var: str, lat: float, t: pd.Timestamp, k: int = 0) -> float:
 
 class FakeOpenMeteo:
     def __init__(self, fail_first: int = 0, fail_status: int = 500, bad_models=(), drop_var: str | None = None,
-                 wrong_count: bool = False):
+                 wrong_count: bool = False, retry_after: bool = True):
         self.requests: list[httpx.Request] = []
         self.fail_first, self.fail_status = fail_first, fail_status
-        self.bad_models, self.drop_var, self.wrong_count = set(bad_models), drop_var, wrong_count
+        self.bad_models, self.drop_var, self.wrong_count, self.retry_after = set(bad_models), drop_var, wrong_count, retry_after
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if self.fail_first > 0:
             self.fail_first -= 1
-            return httpx.Response(self.fail_status, json={"error": True, "reason": "temporary"}, headers={"Retry-After": "0"} if self.fail_status == 429 else {})
+            return httpx.Response(self.fail_status, json={"error": True, "reason": "temporary"}, headers={"Retry-After": "0"} if (self.fail_status == 429 and self.retry_after) else {})
         q = dict(request.url.params)
         if q.get("models") and (q["models"] in self.bad_models or q["models"] not in GOOD_MODELS):
             return httpx.Response(400, json={"error": True, "reason": f"Cannot initialize Model from invalid String value {q['models']}"})
