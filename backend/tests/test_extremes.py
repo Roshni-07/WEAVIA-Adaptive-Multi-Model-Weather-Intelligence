@@ -219,3 +219,25 @@ def test_regional_declaration_counts_hits_misses_false_alarms():
     r = ex.regional_declarations(pd.DataFrame(rows))
     assert r["status"].startswith("indicator") and r["hits"] + r["false_alarms"] + r["misses"] >= 0
     assert r["n_region_days"] == 4
+
+
+@pytest.mark.parametrize("hour", [0, 6, 12, 18])
+def test_every_live_cycle_hour_gets_both_temperature_and_rain_products(hour):
+    """A live issue has one case per lead (valid = issue + 24k h). Rain24 days are IMD days ending 03:00 UTC, so their
+    midpoint is far from that case for the 06/12/18 UTC cycles. Regression: only the 00 UTC cycle used to match."""
+    issue = pd.Timestamp("2026-10-11", tz="UTC") + pd.Timedelta(hours=hour)
+    base = issue.tz_localize(None).normalize()
+    drows, brows = [], []
+    for loc in LOCS:
+        for k in (1, 2, 3):
+            day = base + pd.Timedelta(days=k)
+            for m in MODELS:
+                drows += [(m, day, k, loc.id, "tmax", 33.0 + k), (m, day, k, loc.id, "rain24", 10.0 * k)]
+            for var in ("temp", "rain"):
+                brows.append((var, 24 * k, loc.id, issue + pd.Timedelta(hours=24 * k), issue, 0.5, 0.3, 0.2))
+    daily = pd.DataFrame(drows, columns=["model_id", "valid_day", "lead_day", "location_id", "variable", "value"])
+    blend = pd.DataFrame(brows, columns=["variable", "lead_h", "location_id", "valid_time", "issue_time", "w_a", "w_b", "w_c"])
+    out = ex.daily_blend(daily, blend, MODELS)
+    assert set(out.variable) == {"tmax", "rain24"}, f"cycle {hour:02d}Z lost {set(['tmax', 'rain24']) - set(out.variable)}"
+    assert len(out) == len(LOCS) * 3 * 2
+    assert (out.issue_time == issue).all()

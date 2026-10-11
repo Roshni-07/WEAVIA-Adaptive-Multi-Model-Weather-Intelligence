@@ -71,8 +71,11 @@ def daily_blend(daily_fc: pd.DataFrame, blend: pd.DataFrame, models: list[str], 
         b["valid_time"] = pd.to_datetime(b.valid_time, utc=True)
         b["lead_h"] = b.lead_h.astype("int64")
         b = b.sort_values("valid_time")
+        # A live issue has ONE case per lead (valid = issue + 24k h), and an IMD rain day ends at 03:00 UTC, so the
+        # nearest case can sit up to ~27 h from the day's midpoint (18 UTC cycle). 36 h always finds it; in the
+        # back-test many cases exist per day and the nearest is still the one next to the midpoint.
         m_ = pd.merge_asof(wide, b, left_on="mid", right_on="valid_time", by=["location_id", "lead_h"],
-                           direction="nearest", tolerance=pd.Timedelta(hours=12))
+                           direction="nearest", tolerance=pd.Timedelta(hours=36))
         m_ = m_.dropna(subset=[f"w_{m}" for m in models]).copy()
         F = m_[models].to_numpy(float)
         W = m_[[f"w_{m}" for m in models]].to_numpy(float)

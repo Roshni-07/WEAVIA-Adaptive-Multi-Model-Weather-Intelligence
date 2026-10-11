@@ -13,6 +13,7 @@ export default function Extremes() {
   const [day, setDay] = useState(1);
   const { data: d, error } = useApi(() => api.extremes("", day), [day, issue], true);
   const { data: v } = useApi(() => api.extremesVerification(), [], true);
+  const ro = (d?.regional_outlook ?? []).filter((r: any) => r.stations_meeting_criterion > 0);   // only regions that meet the criterion
   const hwv = v?.verification?.heat_wave?.[String(day)];
   const rv = v?.verification?.heavy_rain?.[String(day)];
   const gain = hwv?.f1_gain_vs_equal;
@@ -60,7 +61,7 @@ export default function Extremes() {
             </button>))}
         </Panel>
         <Panel title="Regional heat-wave outlook" sub="IMD persistence rule: 2+ stations on 2 consecutive days">
-          {d?.regional_outlook?.length ? d.regional_outlook.map((r: any) => (
+          {ro.length ? ro.map((r: any) => (
             <p key={r.region + r.date} className="defn mono">{nice(r.region)} · {r.date} · {r.stations_meeting_criterion} station(s) {r.declared_indicator ? "· heat-wave indicator" : ""}{r.severe_indicator ? " · severe" : ""}</p>
           )) : <p className="defn">No region meets the criterion in this forecast.</p>}
           <p className="defn">Groups are WEAVIA regions, not IMD sub-divisions. Only IMD declares heat waves.</p>
