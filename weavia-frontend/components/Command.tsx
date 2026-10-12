@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useW, Layer } from "@/lib/store";
 import { api, VAR_NAME, VAR_UNIT } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import { MODEL_COLOR, VAR_COLOR, n, pct, nice, day, dt, issueLabel } from "@/lib/format";
+import { MODEL_COLOR, VAR_COLOR, n, pct, nice, day, dt, issueLabel, shortModel } from "@/lib/format";
 import { Panel, VarTabs, Weights, Where } from "./ui";
 import { SCALE, rampCss } from "./Globe";
 
@@ -35,9 +35,10 @@ export function BandChart({ series, unit, color }: { series: any[]; unit: string
 }
 
 function Legend({ layer }: { layer: Layer }) {
+  const models = useW((s) => s.meta)?.models ?? [];
   if (layer === "weights") return (
     <div className="legend"><b>Marker = top-weighted model</b>
-      <div className="lg">{Object.keys(MODEL_COLOR).map((m) => <span key={m}><i style={{ background: MODEL_COLOR[m] }} />{m.slice(-1).toUpperCase()}</span>)}</div></div>);
+      <div className="lg">{models.map((m) => <span key={m.model_id}><i style={{ background: MODEL_COLOR[m.model_id] }} />{shortModel(m.model_id, models)}</span>)}</div></div>);
   const s = SCALE[layer];
   return (
     <div className="legend"><b>{LAYERS.find((l) => l.id === layer)!.label}</b>

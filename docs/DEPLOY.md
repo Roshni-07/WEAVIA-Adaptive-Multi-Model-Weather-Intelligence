@@ -43,6 +43,26 @@ python scripts\make_demo_snapshot.py backend\data demo_data --issues 60
 ```
 The snapshot window is chosen so the landing day is wet and contains forecast-miss events. Verification figures in the snapshot summarise the **full** run. The Lab back-test and skill atlas recompute from the kept rows, so they are noisier.
 
+## Showing REAL data on the hosted link
+
+The hosted demo reads whatever dataset `WEAVIA_DATA` points to. Today that is `demo_data/` (synthetic). To show real data there are two routes.
+
+### Route A: a frozen real-data snapshot (recommended, takes 10 minutes)
+
+The banner reads **SNAPSHOT**, with the capture time and "frozen, not updating". It never claims to be live.
+
+1. On your machine, make sure your real run is current: `python -W ignore -m weavia.live cycle --out data_live2`.
+2. From the repo root: `python scripts\make_demo_snapshot.py backend\data_live2 demo_real --issues 40`. It keeps every live issue plus the last 40 back-test issues. Expect under 25 MB.
+3. Add `data_live*/` to `.gitignore` so the large working folders are never committed, then `git add demo_real`, commit and push. Check `git status` first: it must list `demo_real/` and must **not** list `backend/data_live2`.
+4. In Render, open the service > Environment > set `WEAVIA_DATA` to `../demo_real` > Save. Render redeploys by itself.
+5. Wake the site and check that the banner says REAL DATA and SNAPSHOT.
+
+Update the README sentence that says the demo is synthetic, and the Extremes page text, once you switch.
+
+### Route B: truly live (not built)
+
+A scheduled job would have to run `weavia.live cycle` every 6 hours and put the new files where the API can read them, with `fit` refreshed daily. GitHub Actions can run on a schedule, but its runners share IP addresses, and Open-Meteo's free tier limits by IP, so rate limiting (HTTP 429) is a real risk. Render's free disk is also not persistent. This is a larger piece of work and is not in the repo yet.
+
 ## When real data works
 
 Real-mode artifacts (`data_live/`) are not committed. To host live forecasting, run `python -m weavia.live loop` on a machine or scheduled job that writes to a place the API can read, which is a larger setup than this static demo.

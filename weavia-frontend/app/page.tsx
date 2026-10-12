@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useW, View } from "@/lib/store";
 import { dt, day, ago, issueLabel } from "@/lib/format";
@@ -21,15 +21,26 @@ const NAV: { id: View; label: string; hint: string }[] = [
   { id: "lab", label: "Lab", hint: "Counterfactual weights" },
 ];
 
+function Boot({ error, boot }: { error?: string; boot: () => void }) {
+  const [sec, setSec] = useState(0);
+  useEffect(() => { const t = setInterval(() => setSec((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { if (error && sec > 0 && sec % 6 === 0 && sec <= 150) boot(); }, [sec]);   // keep retrying while the server wakes
+  const waking = sec >= 4;
+  return (
+    <main className="boot"><h1>WEAVIA</h1>
+      <p className="dim">{waking ? "Waking the demo server. Free hosting sleeps when idle, so the first visit can take a minute or two." : "Loading artifacts…"}</p>
+      {waking && <p className="dim mono">{sec}s{error && sec <= 150 ? " · retrying automatically" : ""}</p>}
+      {error && sec > 150 && (<><p>API unreachable.</p><pre>{error}</pre>
+        <p className="dim">Local setup: <code>cd backend && uvicorn weavia.api.main:app --port 8000</code> (run the pipeline first so <code>data/</code> exists). Override the target with <code>WEAVIA_API</code>.</p></>)}
+    </main>
+  );
+}
+
 export default function Page() {
   const { view, setView, boot, meta, error, loading, issue, map } = useW();
   useEffect(() => { boot(); }, [boot]);
 
-  if (error && !meta) return (
-    <main className="boot"><h1>WEAVIA</h1><p>API unreachable.</p><pre>{error}</pre>
-      <p className="dim">Start it: <code>cd backend && uvicorn weavia.api.main:app --port 8000</code> (run the pipeline first so <code>data/</code> exists). Override the target with <code>WEAVIA_API</code>.</p></main>
-  );
-  if (!meta) return <main className="boot"><h1>WEAVIA</h1><p className="dim">Loading artifacts…</p></main>;
+  if (!meta) return <Boot error={error} boot={boot} />;
 
   return (
     <div className="app">
@@ -52,12 +63,12 @@ export default function Page() {
             <b>{meta.provenance.data_mode.toUpperCase()} DATA</b>
             <span>{meta.provenance.data_notice}</span>
           </div>
-          {meta.provenance.live && (() => { const L = meta.provenance.live!; const bad = L.stale || L.state !== "ok";
+          {meta.provenance.live && (() => { const L = meta.provenance.live!; const snap = !!L.snapshot; const bad = !snap && (L.stale || L.state !== "ok");
             return (
               <div className={"notice " + (bad ? "syn" : "")} role={bad ? "alert" : "status"}>
-                <b>{L.stale ? "STALE" : L.state === "ok" ? "LIVE" : L.state.toUpperCase()}</b>
+                <b>{snap ? "SNAPSHOT" : L.stale ? "STALE" : L.state === "ok" ? "LIVE" : L.state.toUpperCase()}</b>
                 <span>
-                  cycle {dt(L.issue_time)} · fetched {ago(L.age_minutes)} · {L.models_ok.length} of {L.models_ok.length + Object.keys(L.models_missing).length} models
+                  {snap ? `real-data snapshot · cycle ${dt(L.issue_time)} · captured ${dt(L.fetched_at)} · frozen, not updating · ` : `cycle ${dt(L.issue_time)} · fetched ${ago(L.age_minutes)} · `}{L.models_ok.length} of {L.models_ok.length + Object.keys(L.models_missing).length} models
                   {Object.keys(L.models_missing).length > 0 && ` · missing: ${Object.keys(L.models_missing).join(", ")}`}
                   {L.state === "failed" && L.reason ? ` · ${L.reason}` : ""}
                   {L.stale ? " · showing the last good forecast, not current data" : ""}

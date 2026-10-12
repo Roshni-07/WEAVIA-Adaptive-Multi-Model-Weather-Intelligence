@@ -6,8 +6,8 @@ import * as THREE from "three";
 import { feature, mesh } from "topojson-client";
 import world from "world-atlas/countries-110m.json";
 import { MapOut, MapPoint, Var } from "@/lib/api";
-import { Layer } from "@/lib/store";
-import { MODEL_COLOR, VAR_COLOR } from "@/lib/format";
+import { Layer, useW } from "@/lib/store";
+import { MODEL_COLOR, VAR_COLOR, shortModel } from "@/lib/format";
 
 const R = 1;
 const B = { lon0: 62, lon1: 100, lat0: 4, lat1: 38 };
@@ -157,6 +157,7 @@ function Markers({ map, layer, selected, onSelect, thr }: { map: MapOut; layer: 
 /* ---- model-weight flow: four model nodes feed the selected station; width & speed scale with trust weight ---- */
 function Flow({ map, selected }: { map: MapOut; selected: string }) {
   const p = map.points.find((x) => x.location_id === selected);
+  const models = useW((s) => s.meta)?.models;
   const refs = useRef<any[]>([]);
   const geo = useMemo(() => {
     if (!p) return [];
@@ -177,7 +178,7 @@ function Flow({ map, selected }: { map: MapOut; selected: string }) {
         <group key={g.m}>
           <Line ref={(r: any) => (refs.current[i] = r)} points={g.pts} color={MODEL_COLOR[g.m]} lineWidth={0.6 + g.w * 7} dashed dashSize={0.05} gapSize={0.035} transparent opacity={0.35 + 0.65 * g.w} />
           <Html position={g.node} center zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
-            <div className="mnode" style={{ borderColor: MODEL_COLOR[g.m], color: MODEL_COLOR[g.m] }}>{g.m.slice(-1).toUpperCase()} <b>{Math.round(g.w * 100)}</b></div>
+            <div className="mnode" style={{ borderColor: MODEL_COLOR[g.m], color: MODEL_COLOR[g.m] }}>{shortModel(g.m, models)} <b>{Math.round(g.w * 100)}</b></div>
           </Html>
         </group>
       ))}

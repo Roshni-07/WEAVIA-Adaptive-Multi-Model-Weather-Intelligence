@@ -1,0 +1,19 @@
+{
+  "fetched_at": "2026-10-12T12:03:34.489511+00:00",
+  "state": "ok",
+  "daily_extremes": "ok (120 rows)",
+  "n_cases": 60,
+  "n_incomplete_dropped": 0,
+  "rain_events_flagged": 0,
+  "issue_time": "2026-10-12T12:00:00+00:00",
+  "models_ok": [
+    "aifs",
+    "gfs",
+    "icon",
+    "ifs"
+  ],
+  "models_missing": {},
+  "truth_source": "open-meteo-archive (reanalysis)",
+  "history_end": "2026-10-05 00:00:00+00:00",
+  "snapshot": true
+}

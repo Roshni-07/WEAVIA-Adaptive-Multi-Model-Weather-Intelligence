@@ -322,3 +322,34 @@ def test_refused_30_year_normals_fall_back_to_10_years_and_say_so(art_small, wor
 def test_extremes_resume_requires_a_fit(tmp_path):
     with pytest.raises(FileNotFoundError):
         live.extremes_resume(str(tmp_path / "nothing"))
+
+
+def test_real_snapshot_is_small_labelled_frozen_and_serves_every_route(art_small, world, tmp_path, monkeypatch):
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+    from make_demo_snapshot import make
+    import weavia.api.main as api
+    out = _fresh(art_small, tmp_path)
+    live.cycle(str(out), now=NOW, client=make_client(WorldFake(world, ISSUE)), log=lambda *_: None)
+    info = make(str(out), str(tmp_path / "snap"), n_issues=12)
+    assert info["bytes"] < 40e6 and info["live_issues"] == 1
+    monkeypatch.setattr(api, "DATA_DIR", str(tmp_path / "snap"))
+    monkeypatch.setattr(api, "_store", None)
+    c = TestClient(api.app)
+    meta = c.get("/api/v1/meta").json()
+    lv = meta["provenance"]["live"]
+    assert lv["snapshot"] is True and lv["stale"] is False                    # labelled frozen, never "stale" or "live"
+    assert "REAL-DATA SNAPSHOT" in meta["provenance"]["data_notice"] and meta["provenance"]["data_mode"] == "real"
+    assert c.get("/api/v1/health").json()["status"] == "ok"
+    loc = meta["locations"][0]["id"]
+    for lead in (24, 48, 72):
+        for var in ("rain", "temp", "wind"):
+            for route in ("forecast", "trust", "explain"):
+                assert c.get(f"/api/v1/{route}?location_id={loc}&variable={var}&lead={lead}").status_code == 200, (route, var, lead)
+        assert c.get(f"/api/v1/map?lead={lead}").status_code == 200 and c.get(f"/api/v1/regime?location_id={loc}&lead={lead}").status_code == 200
+    for route in ("/api/v1/verification", "/api/v1/extremes", "/api/v1/extremes/verification", f"/api/v1/timeline?location_id={loc}&variable=rain", "/api/v1/skill-atlas?variable=rain&lead=24", "/api/v1/events"):
+        assert c.get(route).status_code == 200, route
+    ev = c.get("/api/v1/events").json()
+    for e in ev[:5]:
+        assert c.get(f"/api/v1/autopsy/{e['event_id']}?lead=24").status_code == 200

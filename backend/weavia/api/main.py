@@ -60,7 +60,7 @@ def live_block(st: Store) -> dict | None:
         fetched = pd.Timestamp(out["fetched_at"])
         age = (pd.Timestamp.now(tz="UTC") - fetched).total_seconds() / 60
         out["age_minutes"] = round(age, 1)
-        out["stale"] = bool(age > STALE_AFTER_MIN) or out.get("state") == "failed"
+        out["stale"] = (bool(age > STALE_AFTER_MIN) or out.get("state") == "failed") and not out.get("snapshot")      # a frozen snapshot is labelled, not stale
     except Exception:                                   # noqa: BLE001 - never let a bad status file break the API
         out["age_minutes"], out["stale"] = None, True
     return out

@@ -6,6 +6,13 @@ export const dt = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: 
 export const issueLabel = (s: string) => (s.includes("T") ? dt(s) : day(s));      // real-data issues are 6-hourly: show the hour
 export const ago = (min: number | null) => (min == null ? "unknown" : min < 90 ? `${Math.round(min)} min ago` : min < 2880 ? `${(min / 60).toFixed(1)} h ago` : `${Math.round(min / 1440)} d ago`);
 const MODEL_COLORS = ["#d8d4c7", "#8fa6ad", "#b9a77a", "#c58f86"];
+/** Short label for a model marker: "A" for the synthetic "Model A", the catalogue label ("IFS", "AIFS") for real models. */
+export function shortModel(id: string, models?: { model_id: string; name: string; label: string }[]): string {
+  const m = models?.find((x) => x.model_id === id);
+  if (m && /^Model\s+\w$/.test(m.name)) return m.name.slice(-1);
+  return m?.label ?? id.toUpperCase();
+}
+
 export const MODEL_COLOR: Record<string, string> = {
   model_a: MODEL_COLORS[0], model_b: MODEL_COLORS[1], model_c: MODEL_COLORS[2], model_d: MODEL_COLORS[3],
   ifs: MODEL_COLORS[0], aifs: MODEL_COLORS[1], gfs: MODEL_COLORS[2], icon: MODEL_COLORS[3],      // real-data model ids

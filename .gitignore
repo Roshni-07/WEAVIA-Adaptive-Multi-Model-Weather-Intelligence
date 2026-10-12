@@ -12,3 +12,4 @@ data_live/
 *.log
 *.tsbuildinfo
 check_output.txt
+data_live*/

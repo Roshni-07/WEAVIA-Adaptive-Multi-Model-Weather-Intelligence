@@ -4,7 +4,7 @@ export const VAR_NAME: Record<Var, string> = { rain: "Rainfall", temp: "Temperat
 export const VAR_UNIT: Record<Var, string> = { rain: "mm/6h", temp: "°C", wind: "km/h" };
 
 export interface LiveStatus {
-  state: "ok" | "degraded" | "failed"; issue_time: string; fetched_at: string; age_minutes: number | null; stale: boolean;
+  state: "ok" | "degraded" | "failed"; issue_time: string; fetched_at: string; age_minutes: number | null; stale: boolean; snapshot?: boolean;
   models_ok: string[]; models_missing: Record<string, string>; reason?: string; n_incomplete_dropped?: number;
 }
 

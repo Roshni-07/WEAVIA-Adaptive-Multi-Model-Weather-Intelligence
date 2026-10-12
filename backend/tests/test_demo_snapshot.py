@@ -48,11 +48,10 @@ def test_snapshot_is_small_honest_and_serves_every_route(tmp_path):
     assert r["bad"] == [] and r["snapshot"] and r["issues"] == 30 and r["n"] > 40
 
 
-@needs_data
-def test_snapshot_refuses_real_data_runs(tmp_path):
+def test_snapshot_refuses_unknown_data_modes(tmp_path):
     from make_demo_snapshot import make
-    src = tmp_path / "real"
+    src = tmp_path / "x"
     src.mkdir()
-    (src / "meta.json").write_text(json.dumps({"data_mode": "real"}))
+    (src / "meta.json").write_text(json.dumps({"data_mode": "mystery"}))
     with pytest.raises(SystemExit):
         make(str(src), str(tmp_path / "out"))

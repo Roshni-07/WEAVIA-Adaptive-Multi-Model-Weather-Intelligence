@@ -3,7 +3,8 @@
     python scripts/make_demo_snapshot.py backend/data demo_data --issues 60
 
 Keeps the last N test-slice issues (chosen so the landing day is wet and the window contains forecast-miss events),
-every row those issues need, the full skill table, models and verification. The banner text is extended to say it is
+every row those issues need, the full skill table, models and verification. A REAL-data run (weavia.live) is
+supported too: it keeps every live issue plus the last N back-test issues and is labelled a frozen SNAPSHOT. The banner text is extended to say it is
 a snapshot. verification.json is copied untouched: it summarises the FULL run, not the snapshot.
 The Lab back-test and the Skill atlas recompute from the kept rows, so they are noisier than the full-run figures."""
 from __future__ import annotations
@@ -20,8 +21,10 @@ import pandas as pd
 def make(src: str, dst: str, n_issues: int = 60) -> dict:
     s, d = Path(src), Path(dst)
     meta = json.loads((s / "meta.json").read_text())
+    if meta.get("data_mode") == "real":
+        return make_real(s, d, meta, n_issues)
     if meta.get("data_mode") != "synthetic":
-        raise SystemExit("snapshot is meant for the synthetic benchmark; real-data demos are built by weavia.live")
+        raise SystemExit(f"unknown data_mode {meta.get('data_mode')!r}")
     blend = pd.read_parquet(s / "blend.parquet")
     cases = pd.read_parquet(s / "cases.parquet")
     events = pd.read_parquet(s / "events.parquet")
@@ -61,6 +64,45 @@ def make(src: str, dst: str, n_issues: int = 60) -> dict:
                              "events": int(len(ke))}
     (d / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
     return {"dir": str(d), "bytes": sum(p.stat().st_size for p in d.iterdir()), **meta["demo_snapshot"]}
+
+
+def make_real(s: Path, d: Path, meta: dict, n_issues: int) -> dict:
+    """Freeze a REAL-data run (weavia.live fit + cycles) into a small committable dataset. Keeps every live issue and
+    the last N back-test issues. The banner says it is a frozen snapshot, never "live"."""
+    naive = lambda x: pd.to_datetime(x, utc=True).dt.tz_localize(None)
+    blend, cases = pd.read_parquet(s / "blend.parquet"), pd.read_parquet(s / "cases.parquet")
+    blend["_iss"], cases["_iss"] = naive(blend.issue_time), naive(cases.issue_time)
+    issues = np.sort(blend[blend.split == "test"]._iss.unique())
+    a, b = issues[max(0, len(issues) - n_issues)], issues[-1]
+    keep = lambda df: df[((df.split == "test") & (df._iss >= a) & (df._iss <= b)) | (df.split == "live")].drop(columns="_iss")
+    kb, kc = keep(blend), keep(cases)
+    ids = set(kc.case_id)
+    proba = pd.read_parquet(s / "regime_proba.parquet")
+    events = pd.read_parquet(s / "events.parquet")
+    ev_t = naive(events.valid_time)
+    ke = events[(ev_t >= a + np.timedelta64(72, "h")) & (ev_t <= b)]
+    d.mkdir(parents=True, exist_ok=True)
+    for name, df in (("blend", kb), ("cases", kc), ("regime_proba", proba[proba.case_id.isin(ids)]), ("events", ke)):
+        df.reset_index(drop=True).to_parquet(d / f"{name}.parquet", compression="zstd")
+    for f in ("skill.parquet", "models.joblib", "verification.json", "daily_extremes.parquet", "daily_verification.json"):
+        if (s / f).exists():
+            shutil.copy2(s / f, d / f)
+    tr = blend[blend.split == "train"]
+    sq = {f"{v}|{int(l)}": [float(g.spread.quantile(0.50)), float(g.spread.quantile(0.85))] for (v, l), g in tr.groupby(["variable", "lead_h"])}
+    (d / "spread_q.json").write_text(json.dumps(sq))
+    t = pd.read_parquet(s / "truth.parquet")
+    tt = pd.to_datetime(t.time, utc=True)
+    t[tt >= pd.Timestamp(a, tz="UTC") - pd.Timedelta(days=3)].to_parquet(d / "truth.parquet", compression="zstd")
+    live = json.loads((s / "live_status.json").read_text()) if (s / "live_status.json").exists() else {}
+    live["snapshot"] = True
+    (d / "live_status.json").write_text(json.dumps(live, indent=2))
+    taken = live.get("fetched_at", "unknown time")
+    meta["data_notice"] = (meta["data_notice"] + f" REAL-DATA SNAPSHOT captured {taken[:16].replace('T', ' ')} UTC: frozen, not updating. "
+                           f"{len(np.unique(kb.issue_time))} issues. Verification figures summarise the full 90-day run.")
+    meta["demo_snapshot"] = {"real": True, "issues": int(len(np.unique(kb.issue_time))), "taken_at": taken}
+    (d / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
+    return {"dir": str(d), "bytes": sum(p.stat().st_size for p in d.iterdir()), "issues": meta["demo_snapshot"]["issues"],
+            "events": int(len(ke)), "live_issues": int((kb.split == "live").sum() > 0)}
 
 
 if __name__ == "__main__":
