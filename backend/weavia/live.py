@@ -302,7 +302,7 @@ def loop(out_dir="data_live", client=None, refit_hours=24, log=print):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="weavia.live")
-    ap.add_argument("cmd", choices=["check", "fit", "extremes", "cycle", "loop"])
+    ap.add_argument("cmd", choices=["check", "fit", "extremes", "report", "cycle", "loop"])
     ap.add_argument("--out", default="data_live")
     ap.add_argument("--days", type=int, default=365)
     ap.add_argument("--truth-lag-days", type=int, default=6)
@@ -314,6 +314,9 @@ def main(argv=None):
         raise SystemExit(0 if all(v == "ok" for v in rep.values()) else 1)
     if a.cmd == "fit":
         fit(a.out, days=a.days, truth_lag_days=a.truth_lag_days)
+    elif a.cmd == "report":
+        from .report import report
+        print(report(a.out))
     elif a.cmd == "extremes":
         print(json.dumps(extremes_resume(a.out), indent=2, default=str))
     elif a.cmd == "cycle":
